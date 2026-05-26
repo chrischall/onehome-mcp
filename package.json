@@ -40,7 +40,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@fetchproxy/server": "^0.5.1",
+    "@fetchproxy/server": "^0.7.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },
