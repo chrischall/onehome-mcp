@@ -47,6 +47,7 @@ interface SearchResult {
     address_full?: string;
     list_price?: number;
     primary_thumbnail_url?: string;
+    url?: string;
   }>;
 }
 
@@ -193,5 +194,24 @@ describe('search tool — suggestions', () => {
     expect(first.address_full).toContain('Sleeping Bear');
     expect(first.list_price).toBe(629000);
     expect(first.primary_thumbnail_url).toBe('https://cdn/x.jpg');
+    expect(first.url).toBe(
+      'https://portal.onehome.com/en-US/properties/EYxAbC123'
+    );
+  });
+
+  it('omits url when the suggestion has no resolvable listing id', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          // No `id` or `listingId` — defensive against a sparse upstream row.
+          { city: 'Lake Lure', stateOrProvince: 'NC' },
+        ],
+      })
+    );
+    const result = await runTool(transport, 'onehome_search_suggestions', {
+      query: 'partial',
+    });
+    expect(result.suggestions?.[0]?.url).toBeUndefined();
   });
 });
