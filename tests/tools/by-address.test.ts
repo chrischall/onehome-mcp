@@ -156,4 +156,72 @@ describe('onehome_get_by_address', () => {
     });
     await callBy(transport, { address: '1 Main St', group_id: 'g-explicit' });
   });
+
+  it('formats address with postalCity fallback when city is absent', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          {
+            id: 'X',
+            streetNumber: '1',
+            streetName: 'Main',
+            streetSuffix: 'St',
+            postalCity: 'Brooklyn',
+            stateOrProvince: 'NY',
+            postalCode: '11201',
+          },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '1 Main St' });
+    expect(result.address).toBe('1 Main St, Brooklyn, NY, 11201');
+  });
+
+  it('formats #unitNumber when present', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          {
+            id: 'X',
+            streetNumber: '155',
+            streetName: 'Quail Cove',
+            streetSuffix: 'Blvd',
+            unitNumber: '1601',
+            city: 'Lake Lure',
+            stateOrProvince: 'NC',
+            postalCode: '28746',
+          },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '155 Quail Cove Blvd' });
+    expect(result.address).toBe(
+      '155 Quail Cove Blvd #1601, Lake Lure, NC, 28746'
+    );
+  });
+
+  it('falls back to the query string when the top match has no usable address parts', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [{ id: 'X' }] })
+    );
+    const result = await callBy(transport, { address: '1 Sparse Rd' });
+    expect(result.address).toBe('1 Sparse Rd');
+  });
+
+  it('does not pick an entry where id is the empty string and listingId is also missing', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          { id: '' }, // skipped — empty string id
+          { id: 'REAL', city: 'X', stateOrProvince: 'NY' },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '1 Main St' });
+    expect(result.listing_id).toBe('REAL');
+  });
 });

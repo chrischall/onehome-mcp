@@ -112,7 +112,7 @@ export function registerByAddressTools(
         })
       );
       const top = (data.listingSuggestionsSearch ?? []).find(
-        (s) => s?.id ?? s?.listingId
+        (s) => s.id || s.listingId
       );
       if (!top) {
         const result: UnresolvedByAddress = {
@@ -122,7 +122,7 @@ export function registerByAddressTools(
         };
         return textResult(result);
       }
-      const listingId = (top.id ?? top.listingId) as string;
+      const listingId = (top.id || top.listingId) as string;
       const result: ResolvedByAddress = {
         resolved: true,
         url: buildPropertyUrl(listingId),
