@@ -1,0 +1,55 @@
+{
+  "name": "onehome-mcp",
+  "version": "0.6.0",
+  "mcpName": "io.github.chrischall/onehome-mcp",
+  "description": "OneHome (CoreLogic) MCP server for Claude — developed and maintained by AI (Claude Code)",
+  "author": "Claude Code (AI) <https://www.anthropic.com/claude>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrischall/onehome-mcp.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "onehome",
+    "corelogic",
+    "real-estate",
+    "property",
+    "housing"
+  ],
+  "type": "module",
+  "bin": {
+    "onehome-mcp": "dist/bundle.js"
+  },
+  "files": [
+    "dist",
+    ".claude-plugin",
+    ".mcp.json",
+    "server.json",
+    "SKILL.md"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit && npm run bundle",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --external:dotenv --banner:js='import { createRequire as __createRequire } from \"module\"; const require = __createRequire(import.meta.url);' --outfile=dist/bundle.js",
+    "dev": "node dist/bundle.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@fetchproxy/server": "^0.5.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "esbuild": "^0.28.0",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

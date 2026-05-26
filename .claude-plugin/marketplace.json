@@ -1,0 +1,36 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "onehome-mcp",
+  "owner": {
+    "name": "Chris Hall",
+    "email": "chris.c.hall@gmail.com"
+  },
+  "metadata": {
+    "description": "MCP server for OneHome (CoreLogic) — search listings, fetch property details, photos, schools, saved searches. Authenticates via your portal bearer token or your real-estate agent's magic-link URL; can also capture the token from a signed-in portal.onehome.com tab via the fetchproxy browser extension.",
+    "version": "0.6.0"
+  },
+  "plugins": [
+    {
+      "name": "onehome-mcp",
+      "displayName": "OneHome",
+      "source": "./",
+      "description": "MCP server for OneHome (CoreLogic) — search listings, get property details, photos, schools, saved searches",
+      "version": "0.6.0",
+      "author": {
+        "name": "Chris Hall"
+      },
+      "homepage": "https://github.com/chrischall/onehome-mcp",
+      "repository": "https://github.com/chrischall/onehome-mcp",
+      "license": "MIT",
+      "keywords": [
+        "onehome",
+        "corelogic",
+        "real-estate",
+        "property",
+        "housing",
+        "mcp"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

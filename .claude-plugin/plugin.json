@@ -1,0 +1,23 @@
+{
+  "name": "onehome-mcp",
+  "displayName": "OneHome",
+  "version": "0.6.0",
+  "description": "OneHome (CoreLogic) real-estate access for Claude — your agent-shared portal listings, property details, photos, schools, saved searches",
+  "author": {
+    "name": "Chris Hall",
+    "email": "chris.c.hall@gmail.com"
+  },
+  "homepage": "https://github.com/chrischall/onehome-mcp",
+  "repository": "https://github.com/chrischall/onehome-mcp",
+  "license": "MIT",
+  "keywords": [
+    "onehome",
+    "corelogic",
+    "real-estate",
+    "property",
+    "housing",
+    "mcp"
+  ],
+  "skills": "./SKILL.md",
+  "mcp": "./.mcp.json"
+}

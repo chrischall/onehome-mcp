@@ -1,0 +1,40 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.chrischall/onehome-mcp",
+  "description": "OneHome (CoreLogic) real-estate access for Claude — search, property details, photos, saved homes",
+  "repository": {
+    "url": "https://github.com/chrischall/onehome-mcp",
+    "source": "github"
+  },
+  "version": "0.6.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "onehome-mcp",
+      "version": "0.6.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ONEHOME_TOKEN",
+          "description": "Bearer token for services.onehome.com. Paste the raw JWT (Authorization header value, minus the 'Bearer ' prefix) from your signed-in portal.onehome.com session.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "ONEHOME_MAGIC_LINK",
+          "description": "Magic-link URL with ?token=... from your real-estate agent. The MCP extracts the token query param and uses it directly as the bearer.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "ONEHOME_WS_PORT",
+          "description": "Override the fetchproxy WebSocket port (default 37149). Only used when ONEHOME_TOKEN / ONEHOME_MAGIC_LINK are unset and the MCP boots in capture-from-tab mode.",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
