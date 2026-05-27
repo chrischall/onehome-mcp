@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { FetchproxyServerOpts } from '@fetchproxy/server';
 
 const constructorCalls: FetchproxyServerOpts[] = [];
-let captureBehavior: (callIndex: number) => Promise<string> = async () =>
-  'Bearer mock';
+let captureBehavior: () => Promise<string> = async () => 'Bearer mock';
 let captureCallCount = 0;
 
-vi.mock('@fetchproxy/server', () => {
+// Keep the real FetchproxyBridgeDownError around — the mocked server
+// throws an instance of it to simulate the post-retry surface the real
+// 0.8.0 server presents.
+vi.mock('@fetchproxy/server', async () => {
+  const actual = await vi.importActual<typeof import('@fetchproxy/server')>(
+    '@fetchproxy/server',
+  );
   class MockFetchproxyServer {
     public role: string | null = 'mock';
     constructor(opts: FetchproxyServerOpts) {
@@ -17,11 +22,28 @@ vi.mock('@fetchproxy/server', () => {
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- test stub
     async close(): Promise<void> {}
     async captureRequestHeader(): Promise<string> {
-      const i = captureCallCount++;
-      return captureBehavior(i);
+      captureCallCount += 1;
+      return captureBehavior();
+    }
+    bridgeHealth() {
+      return {
+        role: this.role,
+        port: 0,
+        serverVersion: '0.0.0-test',
+        fetchTimeoutMs: 0,
+        bridgeReviveDelayMs: 0,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        lastFailureReason: null,
+        consecutiveFailures: 0,
+        lastExtensionMessageAt: null,
+      };
     }
   }
-  return { FetchproxyServer: MockFetchproxyServer };
+  return {
+    ...actual,
+    FetchproxyServer: MockFetchproxyServer,
+  };
 });
 
 beforeEach(() => {
@@ -58,122 +80,91 @@ describe('FetchproxyTransport — capability declaration', () => {
     expect(opts.serverName).toBe('onehome-mcp');
     expect(opts.domains).toEqual(['onehome.com']);
   });
+
+  it('does NOT pass bridgeReviveDelayMs (relies on server-side default)', async () => {
+    // 0.8.0+ server defaults bridgeReviveDelayMs to 2000. The adapter
+    // doesn't override or expose a knob — anyone needing a different
+    // value can construct their own FetchproxyServer.
+    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
+    new FetchproxyTransport({ version: '0.0.0-test' });
+    expect(constructorCalls[0]!.bridgeReviveDelayMs).toBeUndefined();
+  });
 });
 
-describe('FetchproxyTransport — SW eviction lazy-revive (#38)', () => {
-  it('retries captureRequestHeader once after bridgeReviveDelayMs when the SW is unreachable', async () => {
-    captureBehavior = async (i) => {
-      if (i === 0) throw new Error('Could not establish connection. Receiving end does not exist.');
-      return 'Bearer recovered';
-    };
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({
-      version: '0.0.0-test',
-      bridgeReviveDelayMs: 1,
-    });
-    await t.start();
-    // The first ensureToken() should succeed on the second internal capture attempt.
-    const status = t.status();
-    expect(status.authReady).toBe(false);
-    // Exercise via a fetch path that calls ensureToken — use the
-    // public capture seam by issuing a graphql call with a stub fetch.
-    const stubFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 })
-    );
-    const t2 = new FetchproxyTransport({
-      version: '0.0.0-test',
-      bridgeReviveDelayMs: 1,
-      fetchImpl: stubFetch as unknown as typeof fetch,
-    });
-    await t2.start();
-    const result = await t2.graphql({
-      operationName: 'X',
-      query: 'query X { ok }',
-    });
-    expect(result.status).toBe(200);
-    expect(captureCallCount).toBe(2);
-  });
-
-  it('throws FetchproxyBridgeDownError with retryAttempted=true after the second capture also fails', async () => {
+describe('FetchproxyTransport — capture error surface (post-server-retry)', () => {
+  it('re-throws FetchproxyBridgeDownError from the server unwrapped', async () => {
+    const { FetchproxyBridgeDownError } = await import('@fetchproxy/server');
     captureBehavior = async () => {
-      throw new Error('Could not establish connection. Receiving end does not exist.');
-    };
-    const { FetchproxyTransport, FetchproxyBridgeDownError } = await import(
-      '../src/transport-fetchproxy.js'
-    );
-    const t = new FetchproxyTransport({
-      version: '0.0.0-test',
-      bridgeReviveDelayMs: 1,
-    });
-    await t.start();
-    expect.assertions(3);
-    try {
-      await t.graphql({ operationName: 'X', query: 'query X { ok }' });
-    } catch (err) {
-      expect(err).toBeInstanceOf(FetchproxyBridgeDownError);
-      expect(err).toMatchObject({
-        name: 'FetchproxyBridgeDownError',
+      throw new FetchproxyBridgeDownError({
+        originalError: 'Could not establish connection.',
         retryAttempted: true,
+        op: 'capture_request_header',
       });
-      expect(captureCallCount).toBe(2);
-    }
-  });
-
-  it('skips the retry entirely when bridgeReviveDelayMs=0 and surfaces retryAttempted=false', async () => {
-    captureBehavior = async () => {
-      throw new Error('Receiving end does not exist.');
     };
     const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({
-      version: '0.0.0-test',
-      bridgeReviveDelayMs: 0,
-    });
+    const t = new FetchproxyTransport({ version: '0.0.0-test' });
     await t.start();
     await expect(
-      t.graphql({ operationName: 'X', query: 'query X { ok }' })
-    ).rejects.toMatchObject({
-      name: 'FetchproxyBridgeDownError',
-      retryAttempted: false,
-    });
-    expect(captureCallCount).toBe(1);
+      t.graphql({ operationName: 'X', query: 'query X { ok }' }),
+    ).rejects.toBeInstanceOf(FetchproxyBridgeDownError);
+    await expect(
+      t.graphql({ operationName: 'X', query: 'query X { ok }' }),
+    ).rejects.toMatchObject({ retryAttempted: true });
   });
 
-  it('does NOT retry on non-SW capture errors (e.g. user-interaction timeout)', async () => {
+  it('wraps non-bridge-down errors as FetchproxyAuthCaptureError (e.g. user-interaction timeout)', async () => {
     captureBehavior = async () => {
       throw new Error('timeout: no matching request observed within 120000ms');
     };
     const { FetchproxyTransport, FetchproxyAuthCaptureError } = await import(
       '../src/transport-fetchproxy.js'
     );
-    const t = new FetchproxyTransport({
-      version: '0.0.0-test',
-      bridgeReviveDelayMs: 1,
-    });
+    const t = new FetchproxyTransport({ version: '0.0.0-test' });
     await t.start();
     await expect(
-      t.graphql({ operationName: 'X', query: 'query X { ok }' })
+      t.graphql({ operationName: 'X', query: 'query X { ok }' }),
     ).rejects.toBeInstanceOf(FetchproxyAuthCaptureError);
-    expect(captureCallCount).toBe(1);
   });
 
-  it('FetchproxyBridgeDownError message points at the recovery click + retry-attempted state', async () => {
-    captureBehavior = async () => {
-      throw new Error('Could not establish connection. Receiving end does not exist.');
-    };
+  it('re-exports FetchproxyBridgeDownError so callers importing from this module keep working', async () => {
+    const mod = await import('../src/transport-fetchproxy.js');
+    const fp = await import('@fetchproxy/server');
+    expect(mod.FetchproxyBridgeDownError).toBe(fp.FetchproxyBridgeDownError);
+  });
+});
+
+describe('FetchproxyTransport — status() surface', () => {
+  it('surfaces bridgeHealth().lastExtensionMessageAt under fetchproxy', async () => {
+    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
+    const t = new FetchproxyTransport({ version: '0.0.0-test' });
+    const s = t.status();
+    expect(s.fetchproxy).toBeDefined();
+    expect(s.fetchproxy).toMatchObject({
+      role: 'mock',
+      serverVersion: '0.0.0-test',
+      lastExtensionMessageAt: null,
+    });
+  });
+});
+
+describe('FetchproxyTransport — successful capture', () => {
+  it('strips the Bearer prefix and uses the JWT as the Authorization', async () => {
+    captureBehavior = async () => 'Bearer eyJ.mock.token';
+    const stubFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
     const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
     const t = new FetchproxyTransport({
       version: '0.0.0-test',
-      bridgeReviveDelayMs: 1,
+      fetchImpl: stubFetch as unknown as typeof fetch,
     });
     await t.start();
-    try {
-      await t.graphql({ operationName: 'X', query: 'query X { ok }' });
-      throw new Error('expected throw');
-    } catch (err) {
-      const msg = (err as Error).message;
-      expect(msg).toMatch(/extension/i);
-      expect(msg).toMatch(/click/i);
-      expect(msg).toMatch(/already tried/i);
-    }
+    await t.graphql({ operationName: 'X', query: 'query X { ok }' });
+    expect(captureCallCount).toBe(1);
+    const headers = (stubFetch.mock.calls[0][1] as RequestInit).headers as Record<
+      string,
+      string
+    >;
+    expect(headers.Authorization).toBe('Bearer eyJ.mock.token');
   });
 });
