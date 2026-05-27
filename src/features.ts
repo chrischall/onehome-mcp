@@ -96,20 +96,33 @@ export function loadCommunities(): string[] {
 const LAKE_FRONT_RE = /\b(?:lakefront|lake front|waterfront)\b/i;
 const HOT_TUB_RE = /\bhot tub\b/i;
 
-// Accepts both word orders within a short window — "unfinished basement"
-// AND "basement is unfinished" / "basement, unfinished". The window
-// (~30 chars / no sentence break) catches typical phrasing without
-// chasing across sentences. Same shape for the other qualifiers.
-const BASEMENT_UNFINISHED_RE =
-  /\b(?:unfinished basement|basement[^.!?]{0,30}?\bunfinished)\b/i;
-const BASEMENT_FINISHED_RE =
-  /\b(?:finished basement|basement[^.!?]{0,30}?\bfinished)\b/i;
-const BASEMENT_PARTIAL_RE =
-  /\b(?:partial(?:ly)? (?:finished )?basement|partial basement|basement[^.!?]{0,30}?\bpartial(?:ly)?)\b/i;
+// Accepts both word orders. Canonical adjective form ("unfinished basement")
+// AND verb-attached / parenthetical / punctuated state ("basement is
+// unfinished", "basement: unfinished", "basement, unfinished"). The
+// connector class deliberately rejects free-floating prepositions like
+// "with" / "near" — those would catch "basement with finished oak
+// shelving" → 'finished', which is about the shelving, not the basement.
+const BASEMENT_CONNECTOR = '(?:is|was|are|were|—|–|,|;|:|\\()';
+const BASEMENT_UNFINISHED_RE = new RegExp(
+  `\\b(?:unfinished basement|basement\\s*${BASEMENT_CONNECTOR}\\s*(?:\\w+\\s+){0,2}unfinished)\\b`,
+  'i'
+);
+const BASEMENT_FINISHED_RE = new RegExp(
+  `\\b(?:finished basement|basement\\s*${BASEMENT_CONNECTOR}\\s*(?:\\w+\\s+){0,2}finished)\\b`,
+  'i'
+);
+const BASEMENT_PARTIAL_RE = new RegExp(
+  `\\b(?:partial(?:ly)? (?:finished )?basement|partial basement|basement\\s*${BASEMENT_CONNECTOR}\\s*(?:\\w+\\s+){0,2}partial(?:ly)?)\\b`,
+  'i'
+);
 const BASEMENT_MENTIONED_RE = /\bbasement\b/i;
 
 const FURNISHED_FULLY_RE = /\b(?:fully furnished|sold furnished|turnkey)\b/i;
-const FURNISHED_PARTIAL_RE = /\b(?:almost furnished|furnished with exceptions|with exceptions)\b/i;
+// `with exceptions` is intentionally NOT a standalone alternative — real
+// estate descriptions routinely contain "with exceptions" in title /
+// survey / HOA / disclosure contexts unrelated to furnishings. Require
+// the `furnished` token to anchor the match.
+const FURNISHED_PARTIAL_RE = /\b(?:almost furnished|furnished with exceptions)\b/i;
 const FURNISHED_NEGOTIABLE_RE = /\bfurnishings (?:are )?negotiable\b/i;
 
 const DOCK_PRIVATE_RE = /\bprivate (?:boat )?dock\b/i;

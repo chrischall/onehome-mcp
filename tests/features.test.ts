@@ -84,6 +84,29 @@ describe('extractFeatures', () => {
         ).basement
       ).toBe('unfinished');
     });
+    it('does NOT misclassify "basement with finished oak shelving" as finished (false-positive pin)', () => {
+      // The qualifier ("finished") is describing the shelving, not the
+      // basement. Connector class is `is|was|are|were|—|–|,|;|:|(`;
+      // free-floating prepositions like `with` / `near` should not match.
+      // Result here is "unknown" because the basement IS mentioned but
+      // no state-of-being qualifier is present.
+      expect(
+        extractFeatures(
+          'Basement with finished oak shelving and built-in workbench.',
+          baseCommunities
+        ).basement
+      ).toBe('unknown');
+    });
+    it('matches verb-attached state ("basement is finished")', () => {
+      expect(
+        extractFeatures('The basement is finished and walks out to the patio.', baseCommunities).basement
+      ).toBe('finished');
+    });
+    it('matches colon / punctuated state ("basement: unfinished")', () => {
+      expect(
+        extractFeatures('Lower level — basement: unfinished, ready for buildout.', baseCommunities).basement
+      ).toBe('unfinished');
+    });
   });
 
   describe('furnished', () => {
@@ -99,8 +122,19 @@ describe('extractFeatures', () => {
     it('matches "almost furnished" → "partial"', () => {
       expect(extractFeatures('Almost furnished, see exclusions', baseCommunities).furnished).toBe('partial');
     });
-    it('matches "with exceptions" phrasing → "partial"', () => {
+    it('matches "furnished with exceptions" → "partial"', () => {
       expect(extractFeatures('Furnished with exceptions, list available', baseCommunities).furnished).toBe('partial');
+    });
+    it('does NOT misfire on bare "with exceptions" in non-furnishing context (false-positive pin)', () => {
+      // Real estate descriptions routinely contain "with exceptions" in
+      // title / survey / HOA / disclosure contexts. Don't return "partial"
+      // unless the `furnished` token is present nearby.
+      expect(
+        extractFeatures('Sold with exceptions per title report; modern open floor plan.', baseCommunities).furnished
+      ).toBeNull();
+      expect(
+        extractFeatures('HOA documents available with exceptions noted in section 3.', baseCommunities).furnished
+      ).toBeNull();
     });
     it('matches "furnishings negotiable" → "negotiable"', () => {
       expect(extractFeatures('Furnishings negotiable', baseCommunities).furnished).toBe('negotiable');
@@ -189,6 +223,54 @@ describe('loadCommunities', () => {
     process.env.ONEHOME_COMMUNITIES_FILE = file;
     try {
       expect(loadCommunities()).toEqual(['Test Mountain Club', 'Faux Estates']);
+    } finally {
+      unlinkSync(file);
+      delete process.env.ONEHOME_COMMUNITIES_FILE;
+    }
+  });
+
+  it('falls back to DEFAULT_COMMUNITIES when the env path holds malformed JSON', async () => {
+    const { writeFileSync, unlinkSync, mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'onehome-comm-bad-json-'));
+    const file = join(dir, 'communities.json');
+    writeFileSync(file, '{this is not, valid JSON');
+    process.env.ONEHOME_COMMUNITIES_FILE = file;
+    try {
+      expect(loadCommunities()).toEqual(DEFAULT_COMMUNITIES);
+    } finally {
+      unlinkSync(file);
+      delete process.env.ONEHOME_COMMUNITIES_FILE;
+    }
+  });
+
+  it('falls back to DEFAULT_COMMUNITIES when the env path holds non-array JSON', async () => {
+    const { writeFileSync, unlinkSync, mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'onehome-comm-non-array-'));
+    const file = join(dir, 'communities.json');
+    writeFileSync(file, JSON.stringify({ communities: ['Wrong Shape'] }));
+    process.env.ONEHOME_COMMUNITIES_FILE = file;
+    try {
+      expect(loadCommunities()).toEqual(DEFAULT_COMMUNITIES);
+    } finally {
+      unlinkSync(file);
+      delete process.env.ONEHOME_COMMUNITIES_FILE;
+    }
+  });
+
+  it('falls back to DEFAULT_COMMUNITIES when the env path holds an array with non-string entries', async () => {
+    const { writeFileSync, unlinkSync, mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'onehome-comm-mixed-'));
+    const file = join(dir, 'communities.json');
+    writeFileSync(file, JSON.stringify(['Valid Name', 42, null]));
+    process.env.ONEHOME_COMMUNITIES_FILE = file;
+    try {
+      expect(loadCommunities()).toEqual(DEFAULT_COMMUNITIES);
     } finally {
       unlinkSync(file);
       delete process.env.ONEHOME_COMMUNITIES_FILE;
