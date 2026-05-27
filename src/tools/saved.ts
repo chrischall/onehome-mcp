@@ -81,7 +81,7 @@ export function registerSavedTools(
     {
       title: 'Fetch a OneHome saved search by id',
       description:
-        "Fetch the agent-curated saved search by its id (UUID). Returns the search's name, filter criteria (`filters[]`), polygon, listing count, and — when `include_listing_ids: true` — the full list of OSK listing ids that compose the consumer share. This is the canonical consumer-readable endpoint; the by-groupId variant is agent-only. `saved_search_id` defaults to the MCP's session context when omitted.",
+        "Fetch the agent-curated saved search by its id (UUID). Returns the search's name, filter criteria (`filters[]`), polygon, listing count, and the full list of OSK listing ids that compose the consumer share (`listing_ids`). Pass `include_listing_ids: false` to suppress the listing-id array if you only need the metadata. This is the canonical consumer-readable endpoint; the by-groupId variant is agent-only. `saved_search_id` defaults to the MCP's session context when omitted.",
       annotations: {
         title: 'Fetch a OneHome saved search by id',
         readOnlyHint: true,
@@ -116,7 +116,7 @@ export function registerSavedTools(
       }
       return textResult(
         formatSavedSearch(data.savedSearch, {
-          include_listing_ids: i.include_listing_ids ?? false,
+          include_listing_ids: i.include_listing_ids ?? true,
         })
       );
     }
