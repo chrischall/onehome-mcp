@@ -66,7 +66,7 @@ export function registerPropertyTools(
     {
       title: 'Fetch full details for a OneHome listing',
       description:
-        'Fetch full details for a single OneHome listing by id or portal URL. Returns address, list / close / previous price, $/sqft, beds/baths/sqft, lot size, year built, lat/lng, status, HOA fee, annual tax, full public-remarks description, virtual-tour URL, plus the primary photo. OneHome scopes every listing to a group/market — `group_id` defaults to the magic-link session context; pass it explicitly only if you need to query a different group.',
+        'Fetch full details for a single OneHome listing by id or portal URL. Returns address, list / close / previous price, $/sqft, beds/baths/sqft, lot size, year built, lat/lng, status, HOA fee, annual tax, virtual-tour URL, the primary photo, and an `extracted_features` block (lake_front, hot_tub, basement, furnished, dock, community) keyword-parsed from the description. The raw `description` (PublicRemarks) is omitted by default — pass `include_description: true` to keep it; in most cases the extracted features cover what callers need. OneHome scopes every listing to a group/market — `group_id` defaults to the magic-link session context; pass it explicitly only if you need to query a different group.',
       annotations: {
         title: 'Fetch full details for a OneHome listing',
         readOnlyHint: true,
@@ -78,6 +78,12 @@ export function registerPropertyTools(
         listing_id: z.string().optional(),
         url: z.string().optional(),
         saved_search_id: z.string().optional(),
+        include_description: z
+          .boolean()
+          .optional()
+          .describe(
+            'Include the raw `description` (PublicRemarks) in the response. Defaults to `false` — `extracted_features` is always populated and usually sufficient.'
+          ),
       },
     },
     async (i) => {
@@ -87,7 +93,9 @@ export function registerPropertyTools(
         url: i.url,
         saved_search_id: i.saved_search_id,
       });
-      return textResult(formatListing(listingId, raw));
+      return textResult(
+        formatListing(listingId, raw, { includeDescription: i.include_description })
+      );
     }
   );
 }
