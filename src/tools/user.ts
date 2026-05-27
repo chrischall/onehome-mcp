@@ -191,11 +191,11 @@ export function registerUserTools(
   server.registerTool(
     'onehome_get_session_context',
     {
-      title: "Inspect the MCP's bootstrapped session context",
+      title: "Inspect every registered OneHome session",
       description:
-        "Returns the auth mode, token expiry, and any session scope (group_id / saved_search_id / agent_id / contact_id) the MCP bootstrapped from the checkToken exchange. Tools default unspecified `group_id` / `saved_search_id` arguments from this context, so this is the easiest way to see what they'll default to.",
+        "Returns one entry per registered session — its `session_id`, auth_mode, token expiry, and session scope (group_id / saved_search_id / agent_id / contact_id / mls_id) the MCP bootstrapped from each checkToken exchange. `active_session_id` flags which session answers by default; per-listing routing prefers the session whose `mls_id` matches the listing's `~MLS` suffix. Tools default unspecified `group_id` / `saved_search_id` arguments from the active session's context, so this is the easiest way to see what they'll default to. Single-session use (the common case) returns a one-entry `sessions[]`.",
       annotations: {
-        title: "Inspect the MCP's bootstrapped session context",
+        title: "Inspect every registered OneHome session",
         readOnlyHint: true,
         idempotentHint: true,
         openWorldHint: false,
@@ -203,16 +203,20 @@ export function registerUserTools(
       inputSchema: {},
     },
     async () => {
-      const status = client.bridgeStatus();
-      return textResult({
-        auth_mode: status.authMode,
-        auth_ready: status.authReady,
-        auth_expires_at: status.authExpiresAt,
+      const sessions = client.listSessions().map((s) => ({
+        session_id: s.sessionId,
+        auth_mode: s.status.authMode,
+        auth_ready: s.status.authReady,
+        auth_expires_at: s.status.authExpiresAt,
         auth_expires_at_iso:
-          status.authExpiresAt !== null
-            ? new Date(status.authExpiresAt).toISOString()
+          s.status.authExpiresAt !== null
+            ? new Date(s.status.authExpiresAt).toISOString()
             : null,
-        session_context: status.sessionContext,
+        session_context: s.status.sessionContext,
+      }));
+      return textResult({
+        active_session_id: client.getActiveSessionId(),
+        sessions,
       });
     }
   );

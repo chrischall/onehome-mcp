@@ -22,6 +22,8 @@ afterEach(async () => {
 });
 
 interface SetAuthResult {
+  session_id: string;
+  active_session_id: string;
   auth_mode: string;
   auth_ready: boolean;
   auth_expires_at: number | null;
@@ -53,7 +55,12 @@ describe('onehome_set_auth', () => {
     expect(result.auth_ready).toBe(true);
     expect(result.auth_expires_at).toBe(9_999_999_999_000);
     expect(fetchMock).not.toHaveBeenCalled(); // No exchange needed for a JWT.
-    expect(closeSpy).toHaveBeenCalledTimes(1); // Old transport closed.
+    // Multi-session: old transport is NOT closed — it stays registered
+    // so the caller can switch back via `onehome_set_active_session`
+    // or rely on MLS-suffix routing.
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(result.session_id).toMatch(/^session-\d+$/);
+    expect(result.active_session_id).toBe(result.session_id);
   });
 
   it('exchanges a magic-link URL and populates session_context', async () => {
@@ -139,13 +146,71 @@ describe('onehome_set_auth', () => {
       registerAuthTools(server, client)
     );
     await harness.callTool('onehome_set_auth', { input: jwt });
-    expect(closeSpy).toHaveBeenCalledTimes(1);
-    // After the swap, the original FakeTransport's status() is no
-    // longer what `bridgeStatus()` returns — the new DirectTransport
-    // reports `authMode: 'env_token'` with the JWT bearer.
+    // Multi-session: old transport stays registered (no close).
+    expect(closeSpy).not.toHaveBeenCalled();
+    // After additive registration, the new DirectTransport is active
+    // and reports `authMode: 'env_token'` with the JWT bearer.
     const status = client.bridgeStatus();
     expect(status.authMode).toBe('env_token');
     expect(status.authReady).toBe(true);
+    // Two sessions now registered.
+    expect(client.listSessions()).toHaveLength(2);
+  });
+
+  it('registers additional sessions without replacing the active one (additive)', async () => {
+    const jwt1 = makeJwt({ sub: 'u1', exp: 9_999_999_999 });
+    const jwt2 = makeJwt({ sub: 'u2', exp: 9_999_999_998 });
+    const transport = new FakeTransport();
+    const client = new OneHomeClient({ transport });
+    harness = await createTestHarness((server) =>
+      registerAuthTools(server, client)
+    );
+
+    const r1 = await harness.callTool('onehome_set_auth', { input: jwt1 });
+    const r2 = await harness.callTool('onehome_set_auth', { input: jwt2 });
+    const p1 = JSON.parse((r1.content[0] as { text: string }).text) as SetAuthResult;
+    const p2 = JSON.parse((r2.content[0] as { text: string }).text) as SetAuthResult;
+    expect(p1.session_id).not.toBe(p2.session_id);
+    // Three sessions: initial FakeTransport + 2 from set_auth.
+    expect(client.listSessions()).toHaveLength(3);
+    // Latest set_auth call wins for active.
+    expect(client.getActiveSessionId()).toBe(p2.session_id);
+  });
+});
+
+describe('onehome_set_active_session', () => {
+  it('switches the active session to the requested id', async () => {
+    const jwt1 = makeJwt({ sub: 'u1', exp: 9_999_999_999 });
+    const transport = new FakeTransport();
+    const client = new OneHomeClient({ transport });
+    const initialActive = client.getActiveSessionId();
+    harness = await createTestHarness((server) =>
+      registerAuthTools(server, client)
+    );
+    const r = await harness.callTool('onehome_set_auth', { input: jwt1 });
+    const setAuth = JSON.parse((r.content[0] as { text: string }).text) as SetAuthResult;
+    // After set_auth, the new session is active. Switch back to the
+    // initial one.
+    const r2 = await harness.callTool('onehome_set_active_session', {
+      session_id: initialActive,
+    });
+    const out = JSON.parse((r2.content[0] as { text: string }).text);
+    expect(out.active_session_id).toBe(initialActive);
+    expect(client.getActiveSessionId()).toBe(initialActive);
+    expect(setAuth.session_id).not.toBe(initialActive);
+  });
+
+  it('errors when the session_id is not registered', async () => {
+    const transport = new FakeTransport();
+    const client = new OneHomeClient({ transport });
+    harness = await createTestHarness((server) =>
+      registerAuthTools(server, client)
+    );
+    const r = await harness.callTool('onehome_set_active_session', {
+      session_id: 'session-does-not-exist',
+    });
+    expect(r.isError).toBeTruthy();
+    expect((r.content[0] as { text: string }).text).toMatch(/no session/i);
   });
 
   it('rejects empty input', async () => {
