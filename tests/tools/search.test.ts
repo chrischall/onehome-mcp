@@ -158,6 +158,108 @@ describe('search tool — groups + saved searches', () => {
     const result = await runTool(transport, 'onehome_search_properties', {});
     expect(result.count).toBe(1);
   });
+
+  // Issue #27: consumer-share sessions can't reach the raw `listings(groupId)`
+  // endpoint — it returns an empty page. When the session context already
+  // carries a savedSearchId the user clearly wants those listings, so the
+  // tool should silently fall back to the saved-search path instead of
+  // returning a misleading `{ count: 0 }`.
+  it('falls back to saved-search path when raw listings returns 0 but session has a savedSearchId', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-consumer', savedSearchId: 'ss-consumer' },
+    });
+    transport.on('GetListings', (vars) => {
+      expect(vars.groupId).toBe('g-consumer');
+      // Consumer-share groups always come back empty from this endpoint.
+      return ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } });
+    });
+    transport.on('GetSavedSearchBySearchId', (vars) => {
+      expect(vars.searchId).toBe('ss-consumer');
+      return ok({
+        savedSearch: {
+          id: 'ss-consumer',
+          name: 'Consumer share',
+          listingIds: ['CON-1', 'CON-2'],
+        },
+      });
+    });
+    transport.on('GetSavedListings', (vars) => {
+      expect(vars.savedSearchId).toBe('ss-consumer');
+      expect(vars.groupId).toBe('g-consumer');
+      expect(vars.listingIds).toEqual(['CON-1', 'CON-2']);
+      return ok({
+        listingsBySavedSearchId: {
+          pageInfo: { totalElements: 2 },
+          listings: [sampleListing('CON-1', 100000), sampleListing('CON-2', 200000)],
+        },
+      });
+    });
+    // Caller supplied only group_id — no saved_search_id arg.
+    const result = await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-consumer',
+    });
+    expect(result.count).toBe(2);
+    expect(result.saved_search_id).toBe('ss-consumer');
+    expect(result.listings?.[0]?.listing_id).toBe('CON-1');
+    // The raw listings call must have happened first; fallback is conditional.
+    expect(transport.calls.map((c) => c.operationName)).toEqual([
+      'GetListings',
+      'GetSavedSearchBySearchId',
+      'GetSavedListings',
+    ]);
+  });
+
+  it('does NOT fall back when the raw listings call returns non-zero results', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      // Even though the session has a savedSearchId, the raw call worked
+      // — this is the agent-session shape. Don't double-fetch.
+      sessionContext: { groupId: 'g-agent', savedSearchId: 'ss-agent' },
+    });
+    transport.on('GetListings', () =>
+      ok({
+        listings: {
+          pageInfo: { totalElements: 2 },
+          listings: [sampleListing('A', 100000), sampleListing('B', 200000)],
+        },
+      })
+    );
+    const result = await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-agent',
+    });
+    expect(result.count).toBe(2);
+    expect(result.saved_search_id).toBeUndefined();
+    // Only the raw listings call should have fired.
+    expect(transport.calls.map((c) => c.operationName)).toEqual(['GetListings']);
+  });
+
+  it('surfaces a clear error when raw listings returns 0 and session has no savedSearchId', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'env_token',
+      sessionContext: { groupId: 'g-orphan' },
+    });
+    transport.on('GetListings', () =>
+      ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } })
+    );
+    const client = new OneHomeClient({ transport });
+    harness = await createTestHarness((server) =>
+      registerSearchTools(server, client)
+    );
+    const result = await harness.callTool('onehome_search_properties', {
+      group_id: 'g-orphan',
+    });
+    // MCP returns an error result instead of throwing — check isError.
+    expect(result.isError).toBe(true);
+    const first = result.content[0]!;
+    if (first.type !== 'text') throw new Error('expected text');
+    expect(first.text).toMatch(/consumer/i);
+    expect(first.text).toMatch(/saved_search_id/);
+    expect(transport.calls.map((c) => c.operationName)).toEqual(['GetListings']);
+  });
 });
 
 describe('search tool — suggestions', () => {
