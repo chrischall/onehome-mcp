@@ -40,7 +40,7 @@ import { registerHealthcheckTools } from './tools/healthcheck.js';
 import { registerByAddressTools } from './tools/by-address.js';
 import type { OneHomeTransport } from './transport.js';
 
-const VERSION = '0.6.0'; // x-release-please-version
+const VERSION = '0.7.0'; // x-release-please-version
 
 const port = process.env.ONEHOME_WS_PORT
   ? Number(process.env.ONEHOME_WS_PORT)
