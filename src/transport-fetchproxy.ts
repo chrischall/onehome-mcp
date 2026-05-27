@@ -42,6 +42,7 @@ const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/127.0 Safari/537.36';
 const CAPTURE_TIMEOUT_MS = 120_000;
+const DEFAULT_BRIDGE_REVIVE_DELAY_MS = 2_000;
 
 export class FetchproxyAuthCaptureError extends Error {
   constructor(originalError: string) {
@@ -58,10 +59,70 @@ export class FetchproxyAuthCaptureError extends Error {
   }
 }
 
+/**
+ * Thrown when the fetchproxy extension's service worker is unreachable
+ * during Authorization-header capture. Chrome MV3 evicts extension
+ * service workers after ~30s idle by default; if the user hasn't
+ * touched the portal.onehome.com tab in a while the SW won't respond
+ * to the capture handshake until they click the extension toolbar
+ * icon (or any extension UI) to wake it.
+ *
+ * `retryAttempted: true` means we already burned a one-shot
+ * lazy-revive retry before giving up — the SW is still down. With
+ * `bridgeReviveDelayMs: 0` it's `false`, meaning we surfaced the
+ * first failure without retrying.
+ */
+export class FetchproxyBridgeDownError extends Error {
+  readonly originalError: string;
+  readonly retryAttempted: boolean;
+  readonly hint: string;
+
+  constructor(args: { originalError: string; retryAttempted: boolean }) {
+    const retryClause = args.retryAttempted
+      ? `onehome-mcp already tried a one-shot lazy-revive retry before surfacing this error, so the worker is still down. `
+      : `onehome-mcp's one-shot lazy-revive retry was disabled (bridgeReviveDelayMs=0) so this error fired on the first attempt. `;
+    const hint =
+      `the fetchproxy browser extension's service worker is not ` +
+      `responding ("${args.originalError}"). Chrome evicts extension ` +
+      `service workers after ~30s idle by default. ${retryClause}` +
+      `Wake it by clicking the fetchproxy extension toolbar icon, then ` +
+      `interact with portal.onehome.com (scroll the map, click a pin) ` +
+      `so a fresh GraphQL call triggers the capture, and retry. If it ` +
+      `keeps happening, reload the extension from chrome://extensions.`;
+    super(`fetchproxy bridge down during Authorization capture. ${hint}`);
+    this.name = 'FetchproxyBridgeDownError';
+    this.originalError = args.originalError;
+    this.retryAttempted = args.retryAttempted;
+    this.hint = hint;
+  }
+}
+
+/**
+ * Substring-match the same SW-eviction signatures `@fetchproxy/server`'s
+ * `classifyFetchError` uses for the `'content_script_unreachable'` kind.
+ * Capture-mode errors come through as plain `FetchproxyProtocolError`
+ * messages, so we can't read a discriminated `kind` here — we have to
+ * sniff the message string.
+ */
+function isBridgeDownError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /Could not establish connection/i.test(msg) ||
+    /Receiving end does not exist/i.test(msg) ||
+    /extension disconnected/i.test(msg)
+  );
+}
+
 export interface FetchproxyTransportOptions {
   port?: number;
   version: string;
   fetchImpl?: typeof fetch;
+  /**
+   * Delay before the one-shot retry when capture fails with a service-
+   * worker-unreachable error. Default 2000ms; set to 0 to disable the
+   * retry entirely.
+   */
+  bridgeReviveDelayMs?: number;
   /** Test seam: skip listen() / capture, supply a pre-baked token. */
   _testToken?: string;
 }
@@ -71,6 +132,7 @@ export class FetchproxyTransport implements OneHomeTransport {
   private readonly port: number;
   private readonly serverVersion: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly bridgeReviveDelayMs: number;
   private token: string | null = null;
   private tokenExpiresAt: number | null = null;
   private lastSuccessAt: number | null = null;
@@ -83,6 +145,8 @@ export class FetchproxyTransport implements OneHomeTransport {
     this.port = opts.port ?? DEFAULT_PORT;
     this.serverVersion = opts.version;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+    this.bridgeReviveDelayMs =
+      opts.bridgeReviveDelayMs ?? DEFAULT_BRIDGE_REVIVE_DELAY_MS;
     const config: FetchproxyServerOpts = {
       port: this.port,
       serverName: 'onehome-mcp',
@@ -270,14 +334,35 @@ export class FetchproxyTransport implements OneHomeTransport {
   private async captureToken(): Promise<string> {
     let raw: string;
     try {
-      raw = await this.bridge.captureRequestHeader({
-        urlPattern: GRAPHQL_URL_PATTERN,
-        headerName: 'Authorization',
-        timeoutMs: CAPTURE_TIMEOUT_MS,
-      });
+      raw = await this.captureOnce();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new FetchproxyAuthCaptureError(msg);
+      if (isBridgeDownError(err) && this.bridgeReviveDelayMs > 0) {
+        // Chrome may have evicted the SW; give it a moment to wake on
+        // the next inbound WS frame, then try one more time.
+        await new Promise((r) => setTimeout(r, this.bridgeReviveDelayMs));
+        try {
+          raw = await this.captureOnce();
+        } catch (retryErr) {
+          const msg =
+            retryErr instanceof Error ? retryErr.message : String(retryErr);
+          if (isBridgeDownError(retryErr)) {
+            throw new FetchproxyBridgeDownError({
+              originalError: msg,
+              retryAttempted: true,
+            });
+          }
+          throw new FetchproxyAuthCaptureError(msg);
+        }
+      } else if (isBridgeDownError(err)) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new FetchproxyBridgeDownError({
+          originalError: msg,
+          retryAttempted: false,
+        });
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new FetchproxyAuthCaptureError(msg);
+      }
     }
     // `Authorization: Bearer eyJ...` — strip the prefix if present.
     const trimmed = raw.trim();
@@ -285,6 +370,14 @@ export class FetchproxyTransport implements OneHomeTransport {
       return trimmed.replace(/^Bearer\s+/i, '');
     }
     return trimmed;
+  }
+
+  private async captureOnce(): Promise<string> {
+    return this.bridge.captureRequestHeader({
+      urlPattern: GRAPHQL_URL_PATTERN,
+      headerName: 'Authorization',
+      timeoutMs: CAPTURE_TIMEOUT_MS,
+    });
   }
 
   private setToken(token: string): void {
