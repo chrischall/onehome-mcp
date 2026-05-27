@@ -165,7 +165,11 @@ describe('onehome_get_saved_search_with_listings', () => {
     ).toBeUndefined();
   });
 
-  it('omits description by default and keeps it when include_description: true', async () => {
+  it('never surfaces description on listings (card projection has no PublicRemarks)', async () => {
+    // FRAGMENT_LISTING_CARD does not request PublicRemarks, so listings
+    // returned here never carry a description. Even if a future regression
+    // started threading PublicRemarks through the mock, the tool must not
+    // expose it — callers needing prose call onehome_get_property(listing_id).
     const transport = new FakeTransport();
     transport.on('GetSavedSearchBySearchId', () =>
       ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
@@ -178,32 +182,11 @@ describe('onehome_get_saved_search_with_listings', () => {
         },
       })
     );
-    const withoutDesc = await runCombo(transport, {
+    const result = await runCombo(transport, {
       saved_search_id: 'ss-1',
       group_id: 'g1',
     });
-    expect(withoutDesc.listings?.[0]?.description).toBeUndefined();
-
-    const transport2 = new FakeTransport();
-    transport2.on('GetSavedSearchBySearchId', () =>
-      ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
-    );
-    transport2.on('GetSavedListings', () =>
-      ok({
-        listingsBySavedSearchId: {
-          pageInfo: { totalElements: 1 },
-          listings: [sampleListing('A', 100000, { withDescription: true })],
-        },
-      })
-    );
-    const withDesc = await runCombo(transport2, {
-      saved_search_id: 'ss-1',
-      group_id: 'g1',
-      include_description: true,
-    });
-    expect(withDesc.listings?.[0]?.description).toBe(
-      'Lakefront with private dock.'
-    );
+    expect(result.listings?.[0]?.description).toBeUndefined();
   });
 
   it('passes pagination through to GetSavedListings', async () => {

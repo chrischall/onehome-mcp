@@ -10,31 +10,8 @@ import { formatListing, type RawListingDetail } from '../format.js';
 import {
   formatSavedSearch,
   type FormattedSavedSearch,
+  type RawSavedSearch,
 } from './saved.js';
-
-interface UserQueryEntry {
-  fieldName?: string;
-  type?: string;
-  values?: string[];
-}
-
-interface PolygonPoint {
-  latitude?: number;
-  longitude?: number;
-}
-
-interface RawSavedSearch {
-  id?: string;
-  name?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  setType?: string;
-  listingIds?: string[];
-  isActive?: boolean;
-  resourceID?: string;
-  userQuery?: UserQueryEntry[];
-  polygon?: PolygonPoint[];
-}
 
 interface SavedListingsResponse {
   listingsBySavedSearchId?: {
@@ -61,9 +38,11 @@ export function registerSavedWithListingsTools(
         'so the magic-link-to-listings consumer flow is a single MCP call. Returns ' +
         '`{ saved_search, listings, count, page_info }`. Both `saved_search_id` ' +
         'and `group_id` default to the magic-link session context. Sort defaults to ' +
-        '`property.MajorChangeTimestamp DESC` (Newest). The raw `description` ' +
-        '(PublicRemarks) is omitted from each listing by default — pass ' +
-        '`include_description: true` to keep it.',
+        '`property.MajorChangeTimestamp DESC` (Newest). Listings are returned via ' +
+        'the GraphQL listing-card projection (`buildGetSavedListings`), which does ' +
+        'NOT include `PublicRemarks` — so there is no raw `description` to opt back ' +
+        'into here. Use `onehome_get_property(listing_id)` per row when you need the ' +
+        'full description for a specific listing.',
       annotations: {
         title: 'Fetch a saved search and inflate its listings in one call',
         readOnlyHint: true,
@@ -83,12 +62,6 @@ export function registerSavedWithListingsTools(
           ),
         sort_order: z.enum(['ASC', 'DESC']).optional(),
         include_dislikes: z.boolean().optional(),
-        include_description: z
-          .boolean()
-          .optional()
-          .describe(
-            'Include the raw `description` (PublicRemarks) on each listing. Defaults to `false`.'
-          ),
       },
     },
     async (i) => {
@@ -113,7 +86,6 @@ export function registerSavedWithListingsTools(
       const pageNum = i.page_num ?? 0;
       const pageSize = i.page_size ?? 50;
       const includeDislikes = i.include_dislikes ?? false;
-      const includeDescription = i.include_description ?? false;
       const sort = i.sort_field
         ? { name: i.sort_field, order: i.sort_order ?? 'DESC' }
         : undefined;
@@ -134,8 +106,7 @@ export function registerSavedWithListingsTools(
       );
       const listingIds = ssData.savedSearch.listingIds ?? [];
 
-      // Step 2: short-circuit when the saved search has no listings —
-      // skips the otherwise-empty GetSavedListings round trip.
+      // Step 2: short-circuit when the saved search has no listings.
       if (listingIds.length === 0) {
         return textResult({
           saved_search: formattedSavedSearch,
@@ -163,13 +134,8 @@ export function registerSavedWithListingsTools(
         })
       );
       const listings = data.listingsBySavedSearchId?.listings ?? [];
-      const formattedListings = listings.map((l) => {
-        const formatted = formatListing(l.id ?? '', l);
-        if (!includeDescription && formatted.description !== undefined) {
-          delete formatted.description;
-        }
-        return formatted;
-      });
+      // FRAGMENT_LISTING_CARD has no PublicRemarks; no description ever surfaces here.
+      const formattedListings = listings.map((l) => formatListing(l.id ?? '', l));
       return textResult({
         saved_search: formattedSavedSearch,
         group_id: groupId,
