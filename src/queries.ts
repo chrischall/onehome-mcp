@@ -99,6 +99,7 @@ fragment listingCard on ListingDetail {
   customProperty {
     ListingKey
     FIPSCode
+    UnparsedAddress
   }
 }
 ${FRAGMENT_IMAGE_DETAILS}
@@ -401,6 +402,7 @@ query ListingById($listingId: String!, $groupId: String!, $savedSearchId: String
     customProperty {
       ListingKey
       FIPSCode
+      UnparsedAddress
     }
     rooms {
       RoomType
