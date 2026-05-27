@@ -5,13 +5,7 @@ import { textResult } from '../mcp.js';
 import { fetchListingDetail } from './properties.js';
 import { formatListing, type FormattedListing } from '../format.js';
 
-/**
- * Upper bound on `listing_ids[]`. A real saved-search consumer share
- * tops out in the low hundreds; 200 covers the realistic "give me
- * everything" call while keeping a single bulk_get tool call cheap
- * enough to fan out concurrently without slamming the GraphQL endpoint
- * with thousands of parallel requests.
- */
+// Max concurrent ListingById fan-out; sized to cover a full consumer saved-search share.
 export const BULK_GET_MAX = 200;
 
 interface BulkGetRow {
@@ -60,10 +54,9 @@ export function registerBulkGetTools(
       },
     },
     async (i) => {
-      const groupId =
-        i.group_id ?? client.bridgeStatus().sessionContext.groupId;
-      const savedSearchId =
-        i.saved_search_id ?? client.bridgeStatus().sessionContext.savedSearchId;
+      const ctx = client.bridgeStatus().sessionContext;
+      const groupId = i.group_id ?? ctx.groupId;
+      const savedSearchId = i.saved_search_id ?? ctx.savedSearchId;
       const includeDescription = i.include_description ?? false;
       const rows: BulkGetRow[] = await Promise.all(
         i.listing_ids.map(async (id) => {
@@ -74,13 +67,9 @@ export function registerBulkGetTools(
               listing_id: id,
               saved_search_id: savedSearchId,
             });
-            const property = formatListing(listingId, raw);
-            // Mirror the P0 default-off behavior: drop the raw
-            // PublicRemarks unless the caller opted in.
-            if (!includeDescription && property.description !== undefined) {
-              delete property.description;
-            }
-            row.property = property;
+            row.property = formatListing(listingId, raw, {
+              includeDescription,
+            });
           } catch (err) {
             row.error = err instanceof Error ? err.message : String(err);
           }
