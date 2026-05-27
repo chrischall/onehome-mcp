@@ -106,21 +106,16 @@ describe('FetchproxyTransport — SW eviction lazy-revive (#38)', () => {
       bridgeReviveDelayMs: 1,
     });
     await t.start();
-    await expect(
-      t.graphql({ operationName: 'X', query: 'query X { ok }' })
-    ).rejects.toMatchObject({
-      name: 'FetchproxyBridgeDownError',
-      retryAttempted: true,
-    });
-    expect(captureCallCount).toBe(2);
-    // The error must be the typed class, not the generic capture error.
+    expect.assertions(3);
     try {
-      await new FetchproxyTransport({
-        version: '0.0.0-test',
-        bridgeReviveDelayMs: 1,
-      }).graphql({ operationName: 'X', query: 'query X { ok }' });
+      await t.graphql({ operationName: 'X', query: 'query X { ok }' });
     } catch (err) {
       expect(err).toBeInstanceOf(FetchproxyBridgeDownError);
+      expect(err).toMatchObject({
+        name: 'FetchproxyBridgeDownError',
+        retryAttempted: true,
+      });
+      expect(captureCallCount).toBe(2);
     }
   });
 
