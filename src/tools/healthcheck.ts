@@ -39,6 +39,14 @@ interface HealthcheckResult {
     role: 'host' | 'peer' | null;
     port: number;
     server_version: string;
+    /**
+     * 0.8.0+: unix-ms of the most recent message the fetchproxy bridge
+     * heard from the browser extension. Null if the extension has
+     * never spoken. Useful for diagnosing "is the extension still
+     * connected?" between captures.
+     */
+    last_extension_message_at: number | null;
+    last_extension_message_at_iso?: string;
   };
   probe: {
     operation: ProbeKind;
@@ -170,6 +178,15 @@ export function registerHealthcheckTools(
                 role: status.fetchproxy.role,
                 port: status.fetchproxy.port,
                 server_version: status.fetchproxy.serverVersion,
+                last_extension_message_at:
+                  status.fetchproxy.lastExtensionMessageAt,
+                ...(status.fetchproxy.lastExtensionMessageAt !== null
+                  ? {
+                      last_extension_message_at_iso: new Date(
+                        status.fetchproxy.lastExtensionMessageAt
+                      ).toISOString(),
+                    }
+                  : {}),
               },
             }
           : {}),

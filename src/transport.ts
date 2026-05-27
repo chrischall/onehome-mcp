@@ -95,6 +95,16 @@ export interface BridgeStatus {
     role: 'host' | 'peer' | null;
     port: number;
     serverVersion: string;
+    /**
+     * 0.8.0+: wall-clock unix-ms of the most recent inner frame the
+     * bridge received from the extension (success OR error). Distinct
+     * from `lastSuccessAt`/`lastFailureAt`, which track user-visible
+     * GraphQL outcomes. Useful for "is the extension still answering?"
+     * between captures — e.g. when the captured token expires mid-
+     * session and we need to recapture. Null until the first frame
+     * arrives.
+     */
+    lastExtensionMessageAt: number | null;
   };
 }
 
