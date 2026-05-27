@@ -1,19 +1,3 @@
-/**
- * Regression test for issue #26 / PR #9.
- *
- * The FetchproxyTransport calls `bridge.captureRequestHeader(...)` to
- * snapshot the Authorization header from the user's signed-in portal
- * tab. `@fetchproxy/server` rejects that call unless the MCP declared
- * the `'capture_request_header'` capability up front — the default
- * capability set is `['fetch']`, which does not include it.
- *
- * The fix (src/transport-fetchproxy.ts:97) sets `capabilities` on the
- * `FetchproxyServerOpts` passed into `new FetchproxyServer(...)`. This
- * test pins that wiring so it can't regress unnoticed: we mock the
- * `FetchproxyServer` constructor, instantiate `FetchproxyTransport`,
- * and assert the recorded opts include `'capture_request_header'`.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { FetchproxyServerOpts } from '@fetchproxy/server';
 
