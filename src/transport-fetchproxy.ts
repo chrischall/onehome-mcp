@@ -88,6 +88,13 @@ export class FetchproxyTransport implements OneHomeTransport {
       serverName: 'onehome-mcp',
       version: opts.version,
       domains: ['onehome.com'],
+      // We only capture the Authorization header from the user's
+      // signed-in portal.onehome.com tab — we don't proxy fetches
+      // through the bridge. The default capability set is ['fetch'],
+      // which does NOT include 'capture_request_header', so the bridge
+      // would reject captureRequestHeader() with a "did not declare"
+      // error. Declare explicitly.
+      capabilities: ['capture_request_header'],
       captureHeaders: [
         {
           urlPattern: GRAPHQL_URL_PATTERN,
