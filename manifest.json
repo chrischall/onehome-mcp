@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "onehome-mcp",
   "display_name": "OneHome",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "OneHome (CoreLogic) real-estate access for Claude — search listings, fetch property details, photos, schools, and run mortgage / affordability math against your agent-shared OneHome portal",
   "author": {
     "name": "Chris Chall",
@@ -35,20 +35,65 @@
     }
   },
   "tools": [
-    { "name": "onehome_get_user", "description": "Fetch the signed-in OneHome user profile + shared groups" },
-    { "name": "onehome_get_groups", "description": "List the OneHome consumer-share groups your agent has shared with you" },
-    { "name": "onehome_get_session_context", "description": "Inspect the MCP's bootstrapped magic-link session context" },
-    { "name": "onehome_get_saved_search", "description": "Fetch an agent-curated saved search by id" },
-    { "name": "onehome_search_properties", "description": "List the properties in a OneHome consumer-share / saved search" },
-    { "name": "onehome_search_suggestions", "description": "Free-text suggestion / address search across MLS feeds" },
-    { "name": "onehome_get_property", "description": "Fetch a property's full details by OneHome listing id" },
-    { "name": "onehome_get_property_photos", "description": "Full photo gallery for a OneHome listing" },
-    { "name": "onehome_compare_properties", "description": "Side-by-side comparison of 2-8 OneHome listings" },
-    { "name": "onehome_get_schools", "description": "Local-Logic primary + high schools near a lat/lng" },
-    { "name": "onehome_get_walk_score", "description": "Local-Logic walk / transit / bike scores near a lat/lng" },
-    { "name": "onehome_graphql", "description": "Power-user escape hatch: send a raw GraphQL document with variables" },
-    { "name": "onehome_calculate_mortgage", "description": "Local PITI mortgage-payment calculator — no network" },
-    { "name": "onehome_calculate_affordability", "description": "Local affordability calculator — no network" },
-    { "name": "onehome_healthcheck", "description": "Verify auth + GraphQL reachability end-to-end" }
+    {
+      "name": "onehome_get_user",
+      "description": "Fetch the signed-in OneHome user profile + shared groups"
+    },
+    {
+      "name": "onehome_get_groups",
+      "description": "List the OneHome consumer-share groups your agent has shared with you"
+    },
+    {
+      "name": "onehome_get_session_context",
+      "description": "Inspect the MCP's bootstrapped magic-link session context"
+    },
+    {
+      "name": "onehome_get_saved_search",
+      "description": "Fetch an agent-curated saved search by id"
+    },
+    {
+      "name": "onehome_search_properties",
+      "description": "List the properties in a OneHome consumer-share / saved search"
+    },
+    {
+      "name": "onehome_search_suggestions",
+      "description": "Free-text suggestion / address search across MLS feeds"
+    },
+    {
+      "name": "onehome_get_property",
+      "description": "Fetch a property's full details by OneHome listing id"
+    },
+    {
+      "name": "onehome_get_property_photos",
+      "description": "Full photo gallery for a OneHome listing"
+    },
+    {
+      "name": "onehome_compare_properties",
+      "description": "Side-by-side comparison of 2-8 OneHome listings"
+    },
+    {
+      "name": "onehome_get_schools",
+      "description": "Local-Logic primary + high schools near a lat/lng"
+    },
+    {
+      "name": "onehome_get_walk_score",
+      "description": "Local-Logic walk / transit / bike scores near a lat/lng"
+    },
+    {
+      "name": "onehome_graphql",
+      "description": "Power-user escape hatch: send a raw GraphQL document with variables"
+    },
+    {
+      "name": "onehome_calculate_mortgage",
+      "description": "Local PITI mortgage-payment calculator — no network"
+    },
+    {
+      "name": "onehome_calculate_affordability",
+      "description": "Local affordability calculator — no network"
+    },
+    {
+      "name": "onehome_healthcheck",
+      "description": "Verify auth + GraphQL reachability end-to-end"
+    }
   ]
 }
