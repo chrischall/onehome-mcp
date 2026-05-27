@@ -20,7 +20,7 @@ interface CompareRow {
 
 interface SummaryRow {
   field: string;
-  values: Array<string | number | null>;
+  values: Array<string | number | null | Record<string, unknown>>;
 }
 
 const SUMMARY_FIELDS: Array<keyof FormattedListing> = [
@@ -36,6 +36,7 @@ const SUMMARY_FIELDS: Array<keyof FormattedListing> = [
   'year_built',
   'status',
   'hoa_fee',
+  'hoa_monthly_usd',
   'tax_annual',
 ];
 
@@ -47,9 +48,12 @@ export function buildSummary(rows: CompareRow[]): SummaryRow[] {
       const v = (r.property as unknown as Record<string, unknown>)[field];
       if (v === undefined || v === null) return null;
       if (typeof v === 'string' || typeof v === 'number') return v;
-      // Stringify object fields (hoa_fee, lot_size, major_change) so the
-      // summary table stays flat.
-      return JSON.stringify(v);
+      // Object-valued fields (hoa_fee, lot_size, major_change) stay as
+      // objects so the summary matches the per-row `rows[].property.*`
+      // shape — JSON-encoding them as strings forced callers to re-parse
+      // every cell. (Issue #18.)
+      if (typeof v === 'object') return v as Record<string, unknown>;
+      return null;
     }),
   }));
 }
@@ -63,7 +67,7 @@ export function registerCompareTools(
     {
       title: 'Compare OneHome listings side-by-side',
       description:
-        "Fetch 2 or more OneHome listings and align their facts side-by-side. Each target may supply `listing_id` (preferred) or `url` (a portal URL). Returns the full per-property record (with `extracted_features` populated) per row. Per-target errors are captured per-row — one bad target will not fail the whole call. Calls are concurrent. The raw `description` is omitted from each row by default (`include_description: true` to keep it). Tracking #18.",
+        "Fetch 2 or more OneHome listings and align their facts side-by-side. Each target may supply `listing_id` (preferred) or `url` (a portal URL). Returns the full per-property record (with `extracted_features` populated) per row. Per-target errors are captured per-row — one bad target will not fail the whole call. Calls are concurrent. The raw `description` is omitted from each row by default (`include_description: true` to keep it). The redundant `summary` table is also opt-in via `include_summary: true` — by default only `rows[]` is returned, which already carries every fact.",
       annotations: {
         title: 'Compare OneHome listings side-by-side',
         readOnlyHint: true,
@@ -87,6 +91,12 @@ export function registerCompareTools(
           .optional()
           .describe(
             'Include the raw `description` (PublicRemarks) on each row. Defaults to `false`.'
+          ),
+        include_summary: z
+          .boolean()
+          .optional()
+          .describe(
+            'Include the pivoted `summary` table (one row per compared field, one column per listing). Defaults to `false` because `rows[].property.*` already carries everything — the summary is roughly 30% of the response weight and only useful for human-readable rendering.'
           ),
       },
     },
@@ -114,12 +124,18 @@ export function registerCompareTools(
           return row;
         })
       );
-      return textResult({
+      const body: {
+        group_id: string | undefined;
+        target_count: number;
+        summary?: SummaryRow[];
+        rows: CompareRow[];
+      } = {
         group_id: groupId,
         target_count: i.targets.length,
-        summary: buildSummary(rows),
         rows,
-      });
+      };
+      if (i.include_summary === true) body.summary = buildSummary(rows);
+      return textResult(body);
     }
   );
 }
