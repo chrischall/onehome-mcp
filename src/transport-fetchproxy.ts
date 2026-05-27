@@ -26,11 +26,6 @@ import {
   type FetchproxyServerOpts,
 } from '@fetchproxy/server';
 import { parseJwt, TokenExpiredError } from './auth.js';
-
-// 0.8.0+: re-export the server's typed bridge-down error so callers
-// who previously caught onehome-mcp's local class keep working with
-// no import-path change.
-export { FetchproxyBridgeDownError } from '@fetchproxy/server';
 import type {
   BridgeStatus,
   GraphQLRequest,
@@ -38,6 +33,11 @@ import type {
   OneHomeTransport,
   RestResponse,
 } from './transport.js';
+
+// 0.8.0+: re-export the server's typed bridge-down error so callers
+// who previously caught onehome-mcp's local class keep working with
+// no import-path change.
+export { FetchproxyBridgeDownError } from '@fetchproxy/server';
 
 const DEFAULT_PORT = 37_149;
 const GRAPHQL_URL = 'https://services.onehome.com/graphql';
@@ -71,8 +71,8 @@ export class FetchproxyAuthCaptureError extends Error {
         `Make sure: (a) the fetchproxy browser extension is installed and ` +
         `paired, (b) you have portal.onehome.com open and signed in, and ` +
         `(c) you've interacted with the page (scrolled the map, clicked a ` +
-        `pin, etc.) to trigger a GraphQL call within the ${CAPTURE_TIMEOUT_MS / 1000}s ` +
-        `window. (Service-worker eviction is handled separately by ` +
+        `pin, etc.) to trigger a GraphQL call. ` +
+        `(Service-worker eviction is handled separately by ` +
         `@fetchproxy/server 0.8.0 and surfaces as FetchproxyBridgeDownError, ` +
         `not this error.) Underlying error: ` +
         originalError
