@@ -28,6 +28,7 @@ import { tryBuildDirectTransportFromEnv } from './transport-direct.js';
 import { FetchproxyTransport } from './transport-fetchproxy.js';
 import { registerUserTools } from './tools/user.js';
 import { registerSavedTools } from './tools/saved.js';
+import { registerSavedWithListingsTools } from './tools/saved-with-listings.js';
 import { registerSearchTools } from './tools/search.js';
 import { registerPropertyTools } from './tools/properties.js';
 import { registerPhotosTools } from './tools/photos.js';
@@ -78,6 +79,7 @@ const server = new McpServer({ name: 'onehome-mcp', version: VERSION });
 
 registerUserTools(server, client);
 registerSavedTools(server, client);
+registerSavedWithListingsTools(server, client);
 registerSearchTools(server, client);
 registerPropertyTools(server, client);
 registerPhotosTools(server, client);
