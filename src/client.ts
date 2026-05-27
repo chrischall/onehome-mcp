@@ -6,6 +6,8 @@
  * test having to mock `fetch` itself.
  */
 
+import { parseAuthInput } from './auth.js';
+import { DirectTransport } from './transport-direct.js';
 import type {
   BridgeStatus,
   GraphQLRequest,
@@ -44,7 +46,8 @@ export interface OneHomeClientOptions {
 }
 
 export class OneHomeClient {
-  private readonly transport: OneHomeTransport;
+  private transport: OneHomeTransport;
+  private fetchImpl: typeof fetch | undefined;
 
   constructor(opts: OneHomeClientOptions) {
     this.transport = opts.transport;
@@ -60,6 +63,53 @@ export class OneHomeClient {
 
   bridgeStatus(): BridgeStatus {
     return this.transport.status();
+  }
+
+  /**
+   * Test-only hook so unit tests can inject a fetch mock that
+   * `setAuthFromInput` will plumb into the new `DirectTransport`
+   * (which goes straight to `services.onehome.com/checkToken`).
+   * Production code never calls this.
+   */
+  _setFetchImplForTest(fetchImpl: typeof fetch): void {
+    this.fetchImpl = fetchImpl;
+  }
+
+  /**
+   * Replace the current transport with a `DirectTransport` built from
+   * the supplied input. Accepts a magic-link URL, a raw JWT bearer, or
+   * an email-token — see `parseAuthInput` for the detection rules.
+   *
+   * Closes the old transport (so any fetchproxy WebSocket listener is
+   * torn down) before swapping in the new one. The new transport's
+   * `start()` runs the checkToken exchange when the input is an
+   * email-token, so the returned `BridgeStatus` already reflects the
+   * exchanged bearer + session context.
+   */
+  async setAuthFromInput(input: string): Promise<BridgeStatus> {
+    const parsed = parseAuthInput(input);
+    const next = new DirectTransport({
+      token: parsed.token,
+      authMode: parsed.source,
+      ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}),
+    });
+    await next.start();
+    const previous = this.transport;
+    this.transport = next;
+    try {
+      await previous.close();
+    } catch (err) {
+      // Closing the old fetchproxy bridge can race with in-flight
+      // WebSocket teardown; surface a stderr warning but don't fail
+      // the auth swap — the new transport is already live and the
+      // old one will time out on its own.
+      console.error(
+        `[onehome-mcp] warning: failed to close previous transport during setAuthFromInput: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+    return next.status();
   }
 
   /**
