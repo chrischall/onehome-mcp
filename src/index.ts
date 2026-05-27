@@ -38,6 +38,7 @@ import { registerMortgageTools } from './tools/mortgage.js';
 import { registerAffordabilityTools } from './tools/affordability.js';
 import { registerHealthcheckTools } from './tools/healthcheck.js';
 import { registerByAddressTools } from './tools/by-address.js';
+import { registerAuthTools } from './tools/auth.js';
 import type { OneHomeTransport } from './transport.js';
 
 const VERSION = '0.7.0'; // x-release-please-version
@@ -86,6 +87,7 @@ registerMortgageTools(server);
 registerAffordabilityTools(server);
 registerHealthcheckTools(server, client);
 registerByAddressTools(server, client);
+registerAuthTools(server, client);
 
 const modeBanner = {
   env_token: 'auth: ONEHOME_TOKEN (direct bearer)',

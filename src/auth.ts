@@ -91,7 +91,8 @@ export class TokenExpiredError extends Error {
       `OneHome bearer token expired ${ageSec}s ago at ${new Date(expiredAt).toISOString()}. ` +
         `Refresh it: open portal.onehome.com (signed-in), grab a new bearer from ` +
         `devtools Network tab, and update ONEHOME_TOKEN — or paste a fresh magic-link ` +
-        `URL into ONEHOME_MAGIC_LINK.`
+        `URL into ONEHOME_MAGIC_LINK — or call the \`onehome_set_auth\` tool with the ` +
+        `new link / bearer to refresh in-session without a restart.`
     );
     this.name = 'TokenExpiredError';
     this.expiredAt = expiredAt;
@@ -103,10 +104,53 @@ export class NoTokenError extends Error {
     super(
       'onehome-mcp could not source an Authorization bearer token. ' +
         'Set ONEHOME_TOKEN (raw JWT), or ONEHOME_MAGIC_LINK (portal URL with ?token=...), ' +
-        'or run with the fetchproxy browser extension connected to a signed-in portal.onehome.com tab.'
+        'or run with the fetchproxy browser extension connected to a signed-in portal.onehome.com tab. ' +
+        'You can also set the bearer at runtime via the `onehome_set_auth` tool — pass the magic-link URL or the JWT directly.'
     );
     this.name = 'NoTokenError';
   }
+}
+
+/**
+ * Parse a free-form auth input — a magic-link URL, a raw JWT bearer,
+ * or an email-token — into the canonical `{ token, source }` shape
+ * that `DirectTransport` accepts. Used by the runtime
+ * `onehome_set_auth` tool (and could be re-used at startup for
+ * symmetry with `tryBuildDirectTransportFromEnv`).
+ *
+ * Detection order:
+ *   1. Looks like a URL (has a scheme or `?token=`) → magic-link;
+ *      extract the `token` query param, treat as email-token.
+ *   2. Looks like a 3-segment JWT → use directly as bearer.
+ *   3. Anything else → assume it's a single-segment email-token;
+ *      the DirectTransport will exchange it via checkToken.
+ */
+export interface ParsedAuthInput {
+  /** The token to hand to DirectTransport — either a JWT or an email-token. */
+  token: string;
+  /** How the input was sourced — for status reporting + telemetry. */
+  source: 'magic_link' | 'env_token';
+}
+
+export function parseAuthInput(input: string): ParsedAuthInput {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    throw new NoTokenError();
+  }
+  // URL form: extract the ?token= param.
+  if (/^https?:\/\//i.test(trimmed) || /[?&]token=/.test(trimmed)) {
+    const linkToken = extractTokenFromMagicLink(trimmed);
+    if (!linkToken) {
+      throw new Error(
+        `onehome_set_auth: input looks like a URL but has no \`token\` query parameter. ` +
+          `Expected a magic link like https://portal.onehome.com/en-US/properties/map?token=eyJ...`
+      );
+    }
+    return { token: linkToken, source: 'magic_link' };
+  }
+  // Otherwise treat as a raw token. DirectTransport handles both
+  // 3-segment-JWT (use directly) and 1-segment email-token (exchange).
+  return { token: trimmed, source: 'env_token' };
 }
 
 /**

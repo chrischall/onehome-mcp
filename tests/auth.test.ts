@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extractTokenFromMagicLink,
+  parseAuthInput,
   parseJwt,
   TokenExpiredError,
 } from '../src/auth.js';
@@ -64,6 +65,53 @@ describe('extractTokenFromMagicLink', () => {
   });
 });
 
+describe('parseAuthInput', () => {
+  it('treats a full URL with ?token= as magic_link', () => {
+    expect(
+      parseAuthInput(
+        'https://portal.onehome.com/en-US/properties/map?token=abc123'
+      )
+    ).toEqual({ token: 'abc123', source: 'magic_link' });
+  });
+
+  it('treats a scheme-less URL with ?token= as magic_link', () => {
+    expect(parseAuthInput('portal.onehome.com/x?token=xyz')).toEqual({
+      token: 'xyz',
+      source: 'magic_link',
+    });
+  });
+
+  it('treats a 3-segment JWT as env_token (used directly)', () => {
+    const jwt = makeJwt({ sub: 'u1', exp: 1900000000 });
+    expect(parseAuthInput(jwt)).toEqual({ token: jwt, source: 'env_token' });
+  });
+
+  it('treats a single-segment email-token as env_token (will need exchange)', () => {
+    expect(parseAuthInput('eyJsingle-segment-blob')).toEqual({
+      token: 'eyJsingle-segment-blob',
+      source: 'env_token',
+    });
+  });
+
+  it('throws when the URL is missing ?token=', () => {
+    expect(() =>
+      parseAuthInput('https://portal.onehome.com/en-US/properties/map')
+    ).toThrow(/no `token` query parameter/);
+  });
+
+  it('throws on empty input', () => {
+    expect(() => parseAuthInput('')).toThrow();
+    expect(() => parseAuthInput('   ')).toThrow();
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(parseAuthInput('  abc.def.ghi  ')).toEqual({
+      token: 'abc.def.ghi',
+      source: 'env_token',
+    });
+  });
+});
+
 describe('TokenExpiredError', () => {
   it('carries the expiry timestamp and a refresh hint', () => {
     const expiredAt = Date.now() - 1000 * 60;
@@ -71,5 +119,10 @@ describe('TokenExpiredError', () => {
     expect(err.expiredAt).toBe(expiredAt);
     expect(err.message).toContain('ONEHOME_TOKEN');
     expect(err.message).toContain('expired');
+  });
+
+  it('mentions the onehome_set_auth tool as an in-session refresh path', () => {
+    const err = new TokenExpiredError(Date.now() - 1000);
+    expect(err.message).toContain('onehome_set_auth');
   });
 });
