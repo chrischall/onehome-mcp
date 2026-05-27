@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0](https://github.com/chrischall/onehome-mcp/compare/v0.8.0...v0.9.0) (2026-05-27)
+
+
+### Features
+
+* add onehome_bulk_get for unbounded structured fetch ([#29](https://github.com/chrischall/onehome-mcp/issues/29)) ([a885793](https://github.com/chrischall/onehome-mcp/commit/a885793dcceea918c9c7f55c85438ab8e686a827))
+* add onehome_get_saved_search_with_listings combo tool ([#33](https://github.com/chrischall/onehome-mcp/issues/33)) ([838d14a](https://github.com/chrischall/onehome-mcp/commit/838d14abc0f09057747629271984f2560f81df33))
+* **p0:** default include_description=false + server-side extracted_features ([#28](https://github.com/chrischall/onehome-mcp/issues/28)) ([e161099](https://github.com/chrischall/onehome-mcp/commit/e161099b59fc70150855c54bf7ddacba99b6639c))
+* **saved:** default include_listing_ids=true on get_saved_search ([#30](https://github.com/chrischall/onehome-mcp/issues/30)) ([6364041](https://github.com/chrischall/onehome-mcp/commit/6364041283e2eb7ec248637ead50ef3937f6e2c4)), closes [#23](https://github.com/chrischall/onehome-mcp/issues/23)
+* support multiple concurrent registered sessions (route by MLS suffix) ([#34](https://github.com/chrischall/onehome-mcp/issues/34)) ([2856ab4](https://github.com/chrischall/onehome-mcp/commit/2856ab4e4d63286dffc7466c7b5629e3cc105890))
+* **transport-fetchproxy:** delegate SW lazy-revive to @fetchproxy/server 0.8.0 ([#41](https://github.com/chrischall/onehome-mcp/issues/41)) ([3c026d5](https://github.com/chrischall/onehome-mcp/commit/3c026d5a86fe7da6eade4345dccae1e66f8b4b25))
+
+
+### Bug Fixes
+
+* **search:** fall back to saved-search path when consumer-share group returns 0 ([#36](https://github.com/chrischall/onehome-mcp/issues/36)) ([946f25d](https://github.com/chrischall/onehome-mcp/commit/946f25d988bef948ceb03fef7dd63c95eca7198d)), closes [#27](https://github.com/chrischall/onehome-mcp/issues/27)
+* **transport-fetchproxy:** lazy-revive on SW eviction during capture ([#39](https://github.com/chrischall/onehome-mcp/issues/39)) ([8689413](https://github.com/chrischall/onehome-mcp/commit/8689413236734988a4d08b6d8456971c06a2ce1d))
+
 ## [0.8.0](https://github.com/chrischall/onehome-mcp/compare/v0.7.0...v0.8.0) (2026-05-27)
 
 

@@ -43,7 +43,7 @@ import { registerByAddressTools } from './tools/by-address.js';
 import { registerAuthTools } from './tools/auth.js';
 import type { OneHomeTransport } from './transport.js';
 
-const VERSION = '0.8.0'; // x-release-please-version
+const VERSION = '0.9.0'; // x-release-please-version
 
 const port = process.env.ONEHOME_WS_PORT
   ? Number(process.env.ONEHOME_WS_PORT)
