@@ -37,6 +37,7 @@ import { registerGraphqlTool } from './tools/graphql.js';
 import { registerMortgageTools } from './tools/mortgage.js';
 import { registerAffordabilityTools } from './tools/affordability.js';
 import { registerHealthcheckTools } from './tools/healthcheck.js';
+import { registerByAddressTools } from './tools/by-address.js';
 import type { OneHomeTransport } from './transport.js';
 
 const VERSION = '0.6.0'; // x-release-please-version
@@ -84,6 +85,7 @@ registerGraphqlTool(server, client);
 registerMortgageTools(server);
 registerAffordabilityTools(server);
 registerHealthcheckTools(server, client);
+registerByAddressTools(server, client);
 
 const modeBanner = {
   env_token: 'auth: ONEHOME_TOKEN (direct bearer)',
