@@ -27,11 +27,11 @@ export function registerAuthTools(
   server.registerTool(
     'onehome_set_auth',
     {
-      title: 'Set the OneHome bearer at runtime',
+      title: 'Register an additional OneHome session at runtime',
       description:
-        'Provide a magic-link URL, a raw JWT bearer, or an email-token to authenticate the MCP mid-session — useful when the host was launched without `ONEHOME_TOKEN` / `ONEHOME_MAGIC_LINK` env vars and the fetchproxy capture path is unavailable. The MCP detects the input shape (URL → extract `?token=`; 3-segment JWT → use directly; otherwise → treat as email-token and exchange via `/api/authentication/checkToken`), swaps its transport to a direct bearer-attached client, and returns the new auth status. The response includes only a `bearer_fingerprint` of the resolved JWT (first 8 + `…` + last 4 chars) and the parsed account email — never the full bearer — so the chat transcript stays clean. SECURITY: the input itself sits in your chat history; treat magic links as short-lived credentials and prefer setting the env var when you control the host config. Read-only-on-network in the sense that it does not mutate the OneHome account; it does mutate this MCP\'s internal state (so it\'s marked destructive).',
+        'Provide a magic-link URL, a raw JWT bearer, or an email-token to ADD another authenticated session to the MCP — useful when a buyer holds shares across multiple agents/MLSes (one magic link per share). The MCP detects the input shape (URL → extract `?token=`; 3-segment JWT → use directly; otherwise → treat as email-token and exchange via `/api/authentication/checkToken`), registers a new direct-bearer transport, and marks it active. Previously-registered sessions stay registered — switch back with `onehome_set_active_session(session_id)`, or let MLS-suffix routing (`~CANOPY`, `~HCAOR`, …) pick automatically per listing. The response includes the assigned `session_id`, the new `active_session_id`, the auth_mode/status, the session_context the checkToken response yielded, and a `bearer_fingerprint` of the resolved JWT (first 8 + `…` + last 4 chars) — never the full bearer. SECURITY: the input itself sits in your chat history; treat magic links as short-lived credentials.',
       annotations: {
-        title: 'Set the OneHome bearer at runtime',
+        title: 'Register an additional OneHome session at runtime',
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
@@ -47,8 +47,10 @@ export function registerAuthTools(
       },
     },
     async ({ input }) => {
-      const { status, bearer } = await client.setAuthFromInput(input);
+      const { sessionId, status, bearer } = await client.setAuthFromInput(input);
       return textResult({
+        session_id: sessionId,
+        active_session_id: client.getActiveSessionId(),
         auth_mode: status.authMode,
         auth_ready: status.authReady,
         auth_expires_at: status.authExpiresAt,
@@ -56,6 +58,41 @@ export function registerAuthTools(
         // Confirms what's now in effect (the resolved bearer, not the
         // raw input) without echoing the secret.
         bearer_fingerprint: fingerprint(input, bearer),
+      });
+    }
+  );
+
+  server.registerTool(
+    'onehome_set_active_session',
+    {
+      title: 'Switch which registered OneHome session is active',
+      description:
+        'Force a specific registered session to be the active one. Useful when MLS-suffix routing picks the wrong session (e.g. a free-text search across multiple MLSes, or a listing without a `~MLS` suffix). Pass a `session_id` previously returned by `onehome_set_auth` or surfaced in `onehome_get_session_context`. The active session answers any request that doesn\'t carry a `~MLS`-suffixed listing id.',
+      annotations: {
+        title: 'Switch which registered OneHome session is active',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      inputSchema: {
+        session_id: z
+          .string()
+          .min(1)
+          .describe(
+            'Session id from a previous `onehome_set_auth` response, or one of the ids listed by `onehome_get_session_context`.'
+          ),
+      },
+    },
+    async ({ session_id }) => {
+      client.setActiveSession(session_id);
+      return textResult({
+        active_session_id: client.getActiveSessionId(),
+        sessions: client.listSessions().map((s) => ({
+          session_id: s.sessionId,
+          auth_mode: s.status.authMode,
+          auth_ready: s.status.authReady,
+        })),
       });
     }
   );
