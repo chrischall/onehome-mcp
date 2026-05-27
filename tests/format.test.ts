@@ -110,6 +110,42 @@ describe('formatListing', () => {
     expect(out.mls_listing_key).toBe('CANOPY:4276702');
     expect(out.source_listing_id).toBe('4276702');
   });
+
+  describe('description handling (issues #13 + #14)', () => {
+    const withRemarks: RawListingDetail = {
+      id: 'X',
+      property: {
+        ListPrice: 500000,
+        PublicRemarks:
+          'Stunning lakefront cottage in Rumbling Bald with private dock and hot tub. Unfinished basement for storage.',
+      },
+    };
+
+    it('omits the raw description by default (context-savings default)', () => {
+      const out = formatListing('X', withRemarks);
+      expect(out.description).toBeUndefined();
+    });
+
+    it('includes the raw description when include_description: true', () => {
+      const out = formatListing('X', withRemarks, { includeDescription: true });
+      expect(out.description).toContain('lakefront cottage');
+    });
+
+    it('always populates extracted_features when there is a description', () => {
+      const out = formatListing('X', withRemarks);
+      expect(out.extracted_features).toBeDefined();
+      expect(out.extracted_features!.lake_front).toBe(true);
+      expect(out.extracted_features!.hot_tub).toBe(true);
+      expect(out.extracted_features!.basement).toBe('unfinished');
+      expect(out.extracted_features!.dock).toBe('private');
+      expect(out.extracted_features!.community).toBe('Rumbling Bald');
+    });
+
+    it('omits extracted_features when there is no description', () => {
+      const out = formatListing('X', { id: 'X', property: { ListPrice: 100000 } });
+      expect(out.extracted_features).toBeUndefined();
+    });
+  });
 });
 
 describe('pickPrimaryPhoto', () => {

@@ -63,7 +63,7 @@ export function registerCompareTools(
     {
       title: 'Compare OneHome listings side-by-side',
       description:
-        "Fetch 2 or more OneHome listings and align their facts side-by-side. Each target may supply `listing_id` (preferred) or `url` (a portal URL). Returns a compact summary table aligned by field (address, price, beds/baths, sqft, $/sqft, status, HOA, tax, etc.) plus the full per-property record. Per-target errors are captured per-row — one bad target will not fail the whole call. Calls are concurrent.",
+        "Fetch 2 or more OneHome listings and align their facts side-by-side. Each target may supply `listing_id` (preferred) or `url` (a portal URL). Returns the full per-property record (with `extracted_features` populated) per row. Per-target errors are captured per-row — one bad target will not fail the whole call. Calls are concurrent. The raw `description` is omitted from each row by default (`include_description: true` to keep it). Tracking #18.",
       annotations: {
         title: 'Compare OneHome listings side-by-side',
         readOnlyHint: true,
@@ -82,6 +82,12 @@ export function registerCompareTools(
           )
           .min(2)
           .max(8),
+        include_description: z
+          .boolean()
+          .optional()
+          .describe(
+            'Include the raw `description` (PublicRemarks) on each row. Defaults to `false`.'
+          ),
       },
     },
     async (i) => {
@@ -99,7 +105,9 @@ export function registerCompareTools(
               url: t.url,
               saved_search_id: t.saved_search_id,
             });
-            row.property = formatListing(listingId, raw);
+            row.property = formatListing(listingId, raw, {
+              includeDescription: i.include_description,
+            });
           } catch (err) {
             row.error = err instanceof Error ? err.message : String(err);
           }

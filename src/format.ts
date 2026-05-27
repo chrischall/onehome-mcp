@@ -4,6 +4,18 @@
  * expose to MCP callers. Keeps each tool file thin.
  */
 
+import { extractFeatures, loadCommunities, type ExtractedFeatures } from './features.js';
+
+export interface FormatOptions {
+  /**
+   * Include the raw `description` (PublicRemarks) in the output.
+   * Defaults to `false` because callers usually keyword-parse and
+   * discard it; the server-side `extracted_features` covers the
+   * common extraction needs. Pass `true` to keep the full prose.
+   */
+  includeDescription?: boolean;
+}
+
 export interface RawProperty {
   OriginatingSystemKey?: string;
   StreetAdditionalInfo?: string;
@@ -117,6 +129,7 @@ export interface FormattedListing {
   tax_annual?: number;
   tax_year?: number;
   description?: string;
+  extracted_features?: ExtractedFeatures;
   virtual_tour_url?: string;
   primary_photo_url?: string;
   primary_thumbnail_url?: string;
@@ -154,7 +167,8 @@ export function buildPropertyUrl(listingId: string): string {
 
 export function formatListing(
   listingId: string,
-  raw: RawListingDetail
+  raw: RawListingDetail,
+  opts: FormatOptions = {}
 ): FormattedListing {
   const p = raw.property ?? {};
   const cp = raw.customProperty ?? {};
@@ -224,7 +238,12 @@ export function formatListing(
   }
   if (typeof p.TaxAnnualAmount === 'number') out.tax_annual = p.TaxAnnualAmount;
   if (typeof p.TaxYear === 'number') out.tax_year = p.TaxYear;
-  if (p.PublicRemarks) out.description = p.PublicRemarks;
+  // Always compute extracted_features (cheap, useful) so callers can
+  // drop the raw description. The description itself is opt-in.
+  if (p.PublicRemarks) {
+    out.extracted_features = extractFeatures(p.PublicRemarks, loadCommunities());
+    if (opts.includeDescription === true) out.description = p.PublicRemarks;
+  }
   if (p.VirtualTourURLUnbranded ?? p.VirtualTourURLBranded) {
     out.virtual_tour_url =
       p.VirtualTourURLUnbranded ?? p.VirtualTourURLBranded;
