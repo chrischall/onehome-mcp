@@ -146,6 +146,17 @@ export class DirectTransport implements OneHomeTransport {
   // eslint-disable-next-line @typescript-eslint/no-empty-function -- no-op
   async close(): Promise<void> {}
 
+  /**
+   * The active bearer token. Intentionally returned by reference so
+   * `OneHomeClient.setAuthFromInput` can fingerprint it for the
+   * `onehome_set_auth` response without re-exposing it via
+   * `BridgeStatus`. Callers must not leak this value to network
+   * responses or logs — it is the credential.
+   */
+  currentBearer(): string {
+    return this.bearerToken;
+  }
+
   status(): BridgeStatus {
     return {
       authMode: this.mode,

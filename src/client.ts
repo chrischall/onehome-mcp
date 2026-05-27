@@ -83,10 +83,15 @@ export class OneHomeClient {
    * Closes the old transport (so any fetchproxy WebSocket listener is
    * torn down) before swapping in the new one. The new transport's
    * `start()` runs the checkToken exchange when the input is an
-   * email-token, so the returned `BridgeStatus` already reflects the
+   * email-token, so the returned `status` already reflects the
    * exchanged bearer + session context.
+   *
+   * Returns `{ status, bearer }` so the caller can fingerprint the
+   * *resolved* bearer (not the raw input). The bearer travels through
+   * exactly one return-value hop within the MCP process and must not
+   * be persisted or logged by callers.
    */
-  async setAuthFromInput(input: string): Promise<BridgeStatus> {
+  async setAuthFromInput(input: string): Promise<{ status: BridgeStatus; bearer: string }> {
     const parsed = parseAuthInput(input);
     const next = new DirectTransport({
       token: parsed.token,
@@ -109,7 +114,7 @@ export class OneHomeClient {
         }`
       );
     }
-    return next.status();
+    return { status: next.status(), bearer: next.currentBearer() };
   }
 
   /**

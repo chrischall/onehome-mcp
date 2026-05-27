@@ -26,7 +26,7 @@ interface SetAuthResult {
   auth_ready: boolean;
   auth_expires_at: number | null;
   session_context: Record<string, string | undefined>;
-  input_fingerprint: string;
+  bearer_fingerprint: string;
 }
 
 async function setAuthAndGet(
@@ -92,14 +92,42 @@ describe('onehome_set_auth', () => {
     expect(body.emailToken).toBe('email-token-xyz');
   });
 
-  it('returns a token fingerprint, never the full input', async () => {
+  it('returns a token fingerprint of the bearer, never the full input', async () => {
     const jwt = makeJwt({ sub: 'u1', exp: 9_999_999_999 });
     const transport = new FakeTransport();
     const { result } = await setAuthAndGet(transport, { input: jwt });
-    expect(result.input_fingerprint).toMatch(/…/);
-    expect(result.input_fingerprint.length).toBeLessThan(jwt.length);
+    expect(result.bearer_fingerprint).toMatch(/…/);
+    expect(result.bearer_fingerprint.length).toBeLessThan(jwt.length);
     // Sanity: fingerprint should not contain the JWT signature in full.
-    expect(result.input_fingerprint).not.toContain(jwt.slice(20, 60));
+    expect(result.bearer_fingerprint).not.toContain(jwt.slice(20, 60));
+  });
+
+  it('fingerprints the resolved bearer for magic-link input (not the URL)', async () => {
+    // For magic-link input the raw `input` is a URL — fingerprinting
+    // it would surface "https://p…link" which tells the user nothing
+    // about the credential. Verify the fingerprint reflects the
+    // exchanged sessionToken instead.
+    const sessionJwt = makeJwt({ sub: 'session', exp: 9_999_999_999 });
+    const transport = new FakeTransport();
+    const client = new OneHomeClient({ transport });
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      text: async () =>
+        JSON.stringify({ sessionToken: sessionJwt, email: 'b@x.com' }),
+    });
+    client._setFetchImplForTest(fetchMock as unknown as typeof fetch);
+    harness = await createTestHarness((server) =>
+      registerAuthTools(server, client)
+    );
+    const url = 'https://portal.onehome.com/en-US/properties/map?token=email-token-xyz';
+    const r = await harness.callTool('onehome_set_auth', { input: url });
+    const parsed = JSON.parse(
+      (r.content[0] as { text: string }).text
+    ) as SetAuthResult;
+    // Fingerprint should start with the JWT's first 8 chars, not the URL's.
+    expect(parsed.bearer_fingerprint).toMatch(/^[A-Za-z0-9_-]+…[A-Za-z0-9_-]+$/);
+    expect(parsed.bearer_fingerprint.startsWith(sessionJwt.slice(0, 8))).toBe(true);
+    expect(parsed.bearer_fingerprint.startsWith('https://')).toBe(false);
   });
 
   it('subsequent calls through the client use the new transport (the swap took)', async () => {

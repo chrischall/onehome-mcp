@@ -120,4 +120,9 @@ describe('TokenExpiredError', () => {
     expect(err.message).toContain('ONEHOME_TOKEN');
     expect(err.message).toContain('expired');
   });
+
+  it('mentions the onehome_set_auth tool as an in-session refresh path', () => {
+    const err = new TokenExpiredError(Date.now() - 1000);
+    expect(err.message).toContain('onehome_set_auth');
+  });
 });

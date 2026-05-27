@@ -91,7 +91,8 @@ export class TokenExpiredError extends Error {
       `OneHome bearer token expired ${ageSec}s ago at ${new Date(expiredAt).toISOString()}. ` +
         `Refresh it: open portal.onehome.com (signed-in), grab a new bearer from ` +
         `devtools Network tab, and update ONEHOME_TOKEN — or paste a fresh magic-link ` +
-        `URL into ONEHOME_MAGIC_LINK.`
+        `URL into ONEHOME_MAGIC_LINK — or call the \`onehome_set_auth\` tool with the ` +
+        `new link / bearer to refresh in-session without a restart.`
     );
     this.name = 'TokenExpiredError';
     this.expiredAt = expiredAt;
