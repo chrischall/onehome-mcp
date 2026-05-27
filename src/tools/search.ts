@@ -8,7 +8,7 @@ import {
   buildGetSavedSearchBySearchId,
   buildListingSuggestionsSearch,
 } from '../queries.js';
-import { formatListing, type RawListingDetail } from '../format.js';
+import { buildPropertyUrl, formatListing, type RawListingDetail } from '../format.js';
 
 interface ListingsResponse {
   listings?: { pageInfo?: unknown; listings?: RawListingDetail[] };
@@ -53,9 +53,11 @@ function formatSuggestion(s: SuggestionEntry): Record<string, unknown> {
   const cityState = joinNonEmpty([s.city ?? s.postalCity, s.stateOrProvince], ', ');
   const addr = joinNonEmpty([street, cityState, s.postalCode], ', ');
   const photo = s.media?.[0]?.Image?.Thumbnail?.mediaUrl;
+  const listingId = s.id ?? s.listingId;
   return {
-    listing_id: s.id ?? s.listingId,
+    listing_id: listingId,
     source_listing_id: s.listingId,
+    url: listingId ? buildPropertyUrl(listingId) : undefined,
     address_full: addr || undefined,
     street: street || undefined,
     city: s.city ?? s.postalCity,
