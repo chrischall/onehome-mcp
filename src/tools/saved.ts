@@ -4,18 +4,18 @@ import type { OneHomeClient } from '../client.js';
 import { textResult } from '../mcp.js';
 import { buildGetSavedSearchBySearchId } from '../queries.js';
 
-interface UserQueryEntry {
+export interface UserQueryEntry {
   fieldName?: string;
   type?: string;
   values?: string[];
 }
 
-interface PolygonPoint {
+export interface PolygonPoint {
   latitude?: number;
   longitude?: number;
 }
 
-interface RawSavedSearch {
+export interface RawSavedSearch {
   id?: string;
   name?: string;
   createdAt?: string;
