@@ -21,6 +21,8 @@ interface ByAddressResult {
   address?: string;
   error?: string;
   query?: string;
+  matched_via?: 'suggestions' | 'search_fallback';
+  matched_outside_saved_area?: boolean;
 }
 
 async function callBy(
@@ -223,5 +225,356 @@ describe('onehome_get_by_address', () => {
     );
     const result = await callBy(transport, { address: '1 Main St' });
     expect(result.listing_id).toBe('REAL');
+  });
+
+  it('surfaces matched_via: "suggestions" when the first rung hits', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          { id: 'SUGG_HIT', city: 'Lake Lure', stateOrProvince: 'NC' },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '1 Main St' });
+    expect(result.resolved).toBe(true);
+    expect(result.matched_via).toBe('suggestions');
+  });
+});
+
+describe('onehome_get_by_address — search-fallback rung', () => {
+  it('falls through to the saved-search pool when suggestions misses', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['EYx111', 'EYx222'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          pageInfo: { totalElements: 2, totalPages: 1, pageNumber: 0, pageSize: 2 },
+          listings: [
+            {
+              id: 'EYx111',
+              property: {
+                StreetNumber: '212',
+                StreetName: 'Ridgeway',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+                PostalCode: '28746',
+              },
+            },
+            {
+              id: 'EYx222',
+              property: {
+                StreetNumber: '999',
+                StreetName: 'Other',
+                StreetSuffix: 'St',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '212 Ridgeway Rd',
+      city: 'Lake Lure',
+      state: 'NC',
+      zip: '28746',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('EYx111');
+    expect(result.matched_via).toBe('search_fallback');
+    expect(result.address).toContain('Ridgeway');
+  });
+
+  it('fuzzy-matches the right listing when the fallback pool has multiple hits', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A', 'B', 'C'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '99',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+            {
+              id: 'B',
+              property: {
+                StreetNumber: '231',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+            {
+              id: 'C',
+              property: {
+                StreetNumber: '1',
+                StreetName: 'Highland',
+                StreetSuffix: 'Heights',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '231 Bluebird Rd',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('B');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+
+  it('falls through to raw listings when no savedSearchId on session', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetListings', () =>
+      ok({
+        listings: {
+          listings: [
+            {
+              id: 'RAW_HIT',
+              property: {
+                StreetNumber: '181',
+                StreetName: 'Highland',
+                StreetSuffix: 'Heights',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '181 Highland Heights',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('RAW_HIT');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+
+  it('returns resolved:false when both rungs miss', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '1',
+                StreetName: 'Unrelated',
+                StreetSuffix: 'St',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '999 Nowhere Rd',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.error).toBe('no listing found');
+  });
+
+  it('skips the search-fallback rung when no groupId is available at all', async () => {
+    const transport = new FakeTransport();
+    // No session context, no explicit group_id => no fallback scope.
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    const result = await callBy(transport, { address: '1 Nowhere' });
+    expect(result.resolved).toBe(false);
+    expect(result.error).toBe('no listing found');
+    // search-fallback ops should NOT have been called.
+    const calls = transport.calls.map((c) => c.operationName);
+    expect(calls).not.toContain('GetListings');
+    expect(calls).not.toContain('GetSavedListings');
+  });
+
+  it('skips id-less hits during the fallback pool walk', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['NOID', 'GOOD'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              // id-less hit that would otherwise token-match — must be skipped
+              // so we don't return a broken { listing_id: "" } result.
+              property: {
+                StreetNumber: '231',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+            {
+              id: 'GOOD',
+              property: {
+                StreetNumber: '231',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '231 Bluebird Rd',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('GOOD');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+
+  it('returns resolved:false when only id-less hits token-match', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['NOID'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              property: {
+                StreetNumber: '231',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '231 Bluebird Rd',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.error).toBe('no listing found');
+  });
+
+  it('flags matched_outside_saved_area when fallback hit lacks the input city', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '231',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Asheville', // remapped away from caller's "Lake Lure"
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '231 Bluebird Rd',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('A');
+    expect(result.matched_via).toBe('search_fallback');
+    expect(result.matched_outside_saved_area).toBe(true);
   });
 });
