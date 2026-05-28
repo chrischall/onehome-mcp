@@ -1,0 +1,138 @@
+import { z } from 'zod';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { OneHomeClient } from '../client.js';
+import { textResult } from '../mcp.js';
+import {
+  buildAddressQuery,
+  resolveByAddressOnce,
+  type ByAddressInput,
+  type ByAddressResult,
+} from './by-address.js';
+
+/**
+ * `onehome_resolve_addresses` — bulk address-to-URL resolver. Mirrors
+ * the cohort's structured-row shape (compass/redfin/zillow) and walks
+ * the *exact same* single rung as `onehome_get_by_address` via the
+ * shared `resolveByAddressOnce` helper, so the bulk path can't drift
+ * from the single (parity discipline; issue #42).
+ */
+
+export const RESOLVE_ADDRESSES_MAX = 100;
+const CONCURRENCY = 6;
+
+interface ResolveRow {
+  resolved: boolean;
+  url?: string;
+  listing_id?: string;
+  address?: string;
+  error?: string;
+  query?: string;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!, i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+function toRow(result: ByAddressResult): ResolveRow {
+  if (result.resolved) {
+    return {
+      resolved: true,
+      url: result.url,
+      listing_id: result.listing_id,
+      address: result.address,
+    };
+  }
+  return { resolved: false, error: result.error, query: result.query };
+}
+
+export function registerResolveAddressesTools(
+  server: McpServer,
+  client: OneHomeClient
+): void {
+  server.registerTool(
+    'onehome_resolve_addresses',
+    {
+      title: 'Bulk-resolve street addresses to OneHome URLs + listing_ids',
+      description:
+        `Resolve up to ${RESOLVE_ADDRESSES_MAX} structured addresses to OneHome canonical portal URLs + listing OSK ids in one call. ` +
+        'Each input is a `{address, city?, state?, zip?}` object. Output preserves input order; one row per input, ' +
+        'either `{resolved: true, url, listing_id, address}` or `{resolved: false, error, query}`. ' +
+        'Walks the exact same `ListingSuggestionsSearch` rung as `onehome_get_by_address` (shared helper — bulk and single ' +
+        'cannot diverge). Concurrent fan-out capped at 6 in flight to avoid swamping the upstream. ' +
+        'Per-row errors captured — one bad address never fails the whole batch. ' +
+        '`group_id` defaults to the magic-link session context. Read-only; safe to call repeatedly.',
+      annotations: {
+        title: 'Bulk-resolve street addresses to OneHome URLs + listing_ids',
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        addresses: z
+          .array(
+            z.object({
+              address: z
+                .string()
+                .min(1)
+                .describe('Street address line, e.g. "126 Sleeping Bear Ln".'),
+              city: z.string().optional().describe('e.g. "Lake Lure"'),
+              state: z
+                .string()
+                .optional()
+                .describe('Two-letter state abbreviation, e.g. "NC"'),
+              zip: z.string().optional().describe('ZIP code, e.g. "28746"'),
+            })
+          )
+          .min(1)
+          .max(RESOLVE_ADDRESSES_MAX)
+          .describe(
+            `Up to ${RESOLVE_ADDRESSES_MAX} address inputs. For higher counts, batch into multiple calls.`
+          ),
+        group_id: z
+          .string()
+          .optional()
+          .describe(
+            'OneHome group id to scope every row. Defaults to magic-link session context.'
+          ),
+      },
+    },
+    async (input) => {
+      const ctx = client.bridgeStatus().sessionContext;
+      const groupId = input.group_id ?? ctx.groupId;
+      const inputs = input.addresses as ByAddressInput[];
+      const rows = await mapWithConcurrency(inputs, CONCURRENCY, async (a) => {
+        try {
+          return toRow(await resolveByAddressOnce(client, a, groupId));
+        } catch (e) {
+          return {
+            resolved: false,
+            error: e instanceof Error ? e.message : String(e),
+            query: buildAddressQuery(a),
+          } satisfies ResolveRow;
+        }
+      });
+      const resolved = rows.filter((r) => r.resolved).length;
+      return textResult({
+        ...(groupId ? { group_id: groupId } : {}),
+        count: rows.length,
+        resolved,
+        unresolved: rows.length - resolved,
+        rows,
+      });
+    }
+  );
+}

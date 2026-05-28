@@ -43,13 +43,47 @@ function joinNonEmpty(parts: Array<string | undefined>, sep = ' '): string {
   return parts.map((p) => (p ?? '').trim()).filter((p) => p.length > 0).join(sep);
 }
 
-export function buildAddressQuery(args: {
+export interface ByAddressInput {
   address: string;
   city?: string;
   state?: string;
   zip?: string;
-}): string {
+}
+
+export function buildAddressQuery(args: ByAddressInput): string {
   return joinNonEmpty([args.address, args.city, args.state, args.zip], ', ');
+}
+
+/**
+ * Shared resolver — single place where the by-address rung set lives so
+ * `onehome_get_by_address` and `onehome_resolve_addresses` walk the
+ * same path (parity discipline; issue #42).
+ */
+export async function resolveByAddressOnce(
+  client: OneHomeClient,
+  input: ByAddressInput,
+  groupId?: string
+): Promise<ByAddressResult> {
+  const query = buildAddressQuery(input);
+  const data = await client.graphql<ListingSuggestionsResponse>(
+    buildListingSuggestionsSearch({
+      browseParameter: query,
+      groupId,
+    })
+  );
+  const top = (data.listingSuggestionsSearch ?? []).find(
+    (s) => s.id || s.listingId
+  );
+  if (!top) {
+    return { resolved: false, error: 'no listing found', query };
+  }
+  const listingId = (top.id || top.listingId) as string;
+  return {
+    resolved: true,
+    url: buildPropertyUrl(listingId),
+    listing_id: listingId,
+    address: formatAddress(top, query),
+  };
 }
 
 function formatAddress(s: SuggestionEntry, fallback: string): string {
@@ -102,33 +136,9 @@ export function registerByAddressTools(
       },
     },
     async (input) => {
-      const query = buildAddressQuery(input);
       const ctx = client.bridgeStatus().sessionContext;
       const groupId = input.group_id ?? ctx.groupId;
-      const data = await client.graphql<ListingSuggestionsResponse>(
-        buildListingSuggestionsSearch({
-          browseParameter: query,
-          groupId,
-        })
-      );
-      const top = (data.listingSuggestionsSearch ?? []).find(
-        (s) => s.id || s.listingId
-      );
-      if (!top) {
-        const result: UnresolvedByAddress = {
-          resolved: false,
-          error: 'no listing found',
-          query,
-        };
-        return textResult(result);
-      }
-      const listingId = (top.id || top.listingId) as string;
-      const result: ResolvedByAddress = {
-        resolved: true,
-        url: buildPropertyUrl(listingId),
-        listing_id: listingId,
-        address: formatAddress(top, query),
-      };
+      const result = await resolveByAddressOnce(client, input, groupId);
       return textResult(result);
     }
   );
