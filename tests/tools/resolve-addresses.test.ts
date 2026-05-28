@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { FetchproxyTimeoutError } from '@fetchproxy/server';
 import { OneHomeClient } from '../../src/client.js';
 import { registerResolveAddressesTools } from '../../src/tools/resolve-addresses.js';
 import { registerByAddressTools } from '../../src/tools/by-address.js';
@@ -298,6 +299,42 @@ describe('onehome_resolve_addresses', () => {
     expect(result.rows?.[0]?.matched_via).toBe('suggestions');
     expect(result.rows?.[1]?.matched_via).toBe('search_fallback');
     expect(result.rows?.[1]?.listing_id).toBe('FB');
+  });
+
+  it('wraps bridge timeouts with the canonical "bridge timeout after retry" prefix and retries once', async () => {
+    // Validates the @fetchproxy/server `retryOnceOnTimeout` +
+    // `classifyRowError` wiring: bridge timeouts surface distinctly
+    // from upstream "no listing found" misses (fetchproxy #69).
+    const transport = new FakeTransport();
+    let attempts = 0;
+    transport.on('ListingSuggestionsSearch', (vars) => {
+      const q = vars.browseParameter as string;
+      if (q.includes('timeout')) {
+        attempts++;
+        throw new FetchproxyTimeoutError({
+          url: 'https://services.onehome.com/graphql',
+          timeoutMs: 30000,
+        });
+      }
+      return ok({
+        listingSuggestionsSearch: [
+          { id: 'OK', city: 'X', stateOrProvince: 'NY' },
+        ],
+      });
+    });
+    const result = await callResolve(transport, {
+      addresses: [
+        { address: '1 Good St' },
+        { address: '2 timeout Ave' },
+        { address: '3 Good Rd' },
+      ],
+    });
+    expect(attempts).toBe(2); // initial + one retry on the timing-out row
+    expect(result.rows?.[1]?.resolved).toBe(false);
+    expect(result.rows?.[1]?.error).toMatch(/^bridge timeout after retry: /);
+    expect(result.rows?.[1]?.query).toBeDefined();
+    expect(result.rows?.[0]?.resolved).toBe(true);
+    expect(result.rows?.[2]?.resolved).toBe(true);
   });
 
   it('caps concurrency to avoid swamping the upstream', async () => {
