@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { formatListing, pickPrimaryPhoto, buildPropertyUrl } from '../src/format.js';
+import {
+  formatListing,
+  pickPrimaryPhoto,
+  buildPropertyUrl,
+  lotSizeAcres,
+} from '../src/format.js';
 import type { RawListingDetail } from '../src/format.js';
 
 const SAMPLE: RawListingDetail = {
@@ -74,6 +79,7 @@ describe('formatListing', () => {
     expect(out.year_built).toBe(1995);
     expect(out.status).toBe('Active');
     expect(out.lot_size).toEqual({ area: 0.5, units: 'Acres' });
+    expect(out.lot_size_acres).toBe(0.5);
     expect(out.major_change).toEqual({
       type: 'PriceDecrease',
       at: '2026-05-12T10:00:00Z',
@@ -313,6 +319,116 @@ describe('formatListing', () => {
       };
       const out = formatListing('X', raw);
       expect('tax_is_estimated' in out).toBe(false);
+    });
+  });
+
+  describe('lot_size_acres (issue #82)', () => {
+    // OneHome reports lot size as a unit-tagged {area, units} object
+    // (RESO LotSizeUnits: "Acres" | "Square Feet"), so the derived
+    // acreage is unit-aware — not a blind sqft/43560.
+
+    it('passes through an already-acres lot size, rounded to 2 dp', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { LotSizeArea: 1.05, LotSizeUnits: 'Acres' },
+      };
+      const out = formatListing('X', raw);
+      expect(out.lot_size).toEqual({ area: 1.05, units: 'Acres' });
+      expect(out.lot_size_acres).toBe(1.05);
+    });
+
+    it('converts a Square Feet lot size to acres (45,738 sqft → 1.05)', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { LotSizeArea: 45_738, LotSizeUnits: 'Square Feet' },
+      };
+      const out = formatListing('X', raw);
+      expect(out.lot_size).toEqual({ area: 45_738, units: 'Square Feet' });
+      expect(out.lot_size_acres).toBe(1.05);
+    });
+
+    it('is null (never 0) for a condo with no lot size at all', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { PropertySubType: 'Condominium', ListPrice: 300000 },
+      };
+      const out = formatListing('X', raw);
+      expect(out.lot_size).toBeUndefined();
+      expect(out.lot_size_acres).toBeNull();
+      expect(out.lot_size_acres).not.toBe(0);
+    });
+
+    it('is null when the area is present but the units are unknown', () => {
+      const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { LotSizeArea: 1000, LotSizeUnits: 'Hectares' },
+      };
+      const out = formatListing('X', raw);
+      // lot_size object is still surfaced (raw fidelity preserved)…
+      expect(out.lot_size).toEqual({ area: 1000, units: 'Hectares' });
+      // …but the derived acres bails out rather than guessing.
+      expect(out.lot_size_acres).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('lot_size_acres'));
+      warnSpy.mockRestore();
+    });
+
+    it('is null when units default to "unspecified" (area present, units absent)', () => {
+      const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { LotSizeArea: 0.75 },
+      };
+      const out = formatListing('X', raw);
+      expect(out.lot_size).toEqual({ area: 0.75, units: 'unspecified' });
+      expect(out.lot_size_acres).toBeNull();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('lotSizeAcres helper (issue #82)', () => {
+    // Square-feet conversions from the round-4 field report.
+    it('45,738 sq ft → 1.05 acres', () => {
+      expect(lotSizeAcres(45_738, 'Square Feet')).toBe(1.05);
+    });
+    it('13,503 sq ft → 0.31 acres', () => {
+      expect(lotSizeAcres(13_503, 'Square Feet')).toBe(0.31);
+    });
+    it('94,089 sq ft → 2.16 acres', () => {
+      expect(lotSizeAcres(94_089, 'Square Feet')).toBe(2.16);
+    });
+    it('accepts RESO "SquareFeet"/"Square Foot" spellings', () => {
+      expect(lotSizeAcres(43_560, 'SquareFeet')).toBe(1.0);
+      expect(lotSizeAcres(43_560, 'Square Foot')).toBe(1.0);
+    });
+    // 'sqft' is a non-standard units string the normalizer intentionally
+    // accepts (post-normalization it is reached as-is, no spaces to strip).
+    it('accepts the non-standard "sqft" units string', () => {
+      expect(lotSizeAcres(43_560, 'sqft')).toBe(1);
+    });
+    it('passes Acres through, rounding to 2 dp', () => {
+      expect(lotSizeAcres(0.5, 'Acres')).toBe(0.5);
+      expect(lotSizeAcres(1.0499, 'Acres')).toBe(1.05);
+      expect(lotSizeAcres(2.5, 'Acre')).toBe(2.5);
+    });
+    it('returns null (not 0) for missing/zero/non-numeric area', () => {
+      expect(lotSizeAcres(undefined, 'Acres')).toBeNull();
+      expect(lotSizeAcres(null, 'Square Feet')).toBeNull();
+      expect(lotSizeAcres(0, 'Acres')).toBeNull();
+      expect(lotSizeAcres(NaN, 'Square Feet')).toBeNull();
+    });
+    // A positive lot that rounds to 0 acres (e.g. a 200 sq ft micro-lot)
+    // must come back null, never 0 — same "never 0" invariant as a
+    // missing/zero lot. The smallest non-null is ~218 sq ft → 0.01.
+    it('returns null (not 0) when a positive lot rounds to 0 acres', () => {
+      expect(lotSizeAcres(200, 'Square Feet')).toBeNull();
+      expect(lotSizeAcres(200, 'Square Feet')).not.toBe(0);
+    });
+    it('returns null for unknown / missing units rather than guessing', () => {
+      const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      expect(lotSizeAcres(1000, 'Hectares')).toBeNull();
+      expect(lotSizeAcres(1000, undefined)).toBeNull();
+      warnSpy.mockRestore();
     });
   });
 
