@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  mapWithConcurrency,
+  retryOnceOnTimeout,
+  classifyRowError,
+  BRIDGE_CONCURRENCY,
+} from '@fetchproxy/server';
 import type { OneHomeClient } from '../client.js';
 import { textResult } from '../mcp.js';
 import {
@@ -15,10 +21,15 @@ import {
  * the *exact same* 2-rung ladder as `onehome_get_by_address` via the
  * shared `resolveByAddressOnce` helper, so the bulk path can't drift
  * from the single (parity discipline).
+ *
+ * Fan-out uses the canonical `@fetchproxy/server` bulk helpers:
+ * `mapWithConcurrency` bounded by `BRIDGE_CONCURRENCY` (=6),
+ * `retryOnceOnTimeout` for transient bridge timeouts, and
+ * `classifyRowError` for per-row error wrappers so bridge timeouts
+ * surface distinctly from upstream "no listing found" misses.
  */
 
 export const RESOLVE_ADDRESSES_MAX = 100;
-const CONCURRENCY = 6;
 
 interface ResolveRow {
   resolved: boolean;
@@ -29,24 +40,6 @@ interface ResolveRow {
   query?: string;
   matched_via?: 'suggestions' | 'search_fallback';
   matched_outside_saved_area?: boolean;
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
-      const i = next++;
-      if (i >= items.length) return;
-      out[i] = await fn(items[i]!, i);
-    }
-  });
-  await Promise.all(workers);
-  return out;
 }
 
 function toRow(result: ByAddressResult): ResolveRow {
@@ -124,17 +117,25 @@ export function registerResolveAddressesTools(
       const ctx = client.bridgeStatus().sessionContext;
       const groupId = input.group_id ?? ctx.groupId;
       const inputs = input.addresses as ByAddressInput[];
-      const rows = await mapWithConcurrency(inputs, CONCURRENCY, async (a) => {
-        try {
-          return toRow(await resolveByAddressOnce(client, a, groupId));
-        } catch (e) {
-          return {
-            resolved: false,
-            error: e instanceof Error ? e.message : String(e),
-            query: buildAddressQuery(a),
-          } satisfies ResolveRow;
+      const rows = await mapWithConcurrency(
+        inputs,
+        BRIDGE_CONCURRENCY,
+        async (a) => {
+          try {
+            return toRow(
+              await retryOnceOnTimeout(() =>
+                resolveByAddressOnce(client, a, groupId)
+              )
+            );
+          } catch (e) {
+            return {
+              resolved: false,
+              error: classifyRowError(e).message,
+              query: buildAddressQuery(a),
+            } satisfies ResolveRow;
+          }
         }
-      });
+      );
       const resolved = rows.filter((r) => r.resolved).length;
       return textResult({
         ...(groupId ? { group_id: groupId } : {}),

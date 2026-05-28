@@ -127,6 +127,7 @@ export class FetchproxyTransport implements OneHomeTransport {
       // 0.8.0+ server handles SW-eviction lazy-revive internally
       // (default 2000ms) and throws FetchproxyBridgeDownError on
       // persistent failure.
+      keepAliveIntervalMs: 25_000, // fetchproxy#71 — keep SW resident for capture-mode token-refresh window
     };
     this.bridge = new FetchproxyServer(config);
     if (opts._testToken) this.setToken(opts._testToken);
