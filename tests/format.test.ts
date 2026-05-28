@@ -401,6 +401,11 @@ describe('formatListing', () => {
       expect(lotSizeAcres(43_560, 'SquareFeet')).toBe(1.0);
       expect(lotSizeAcres(43_560, 'Square Foot')).toBe(1.0);
     });
+    // 'sqft' is a non-standard units string the normalizer intentionally
+    // accepts (post-normalization it is reached as-is, no spaces to strip).
+    it('accepts the non-standard "sqft" units string', () => {
+      expect(lotSizeAcres(43_560, 'sqft')).toBe(1);
+    });
     it('passes Acres through, rounding to 2 dp', () => {
       expect(lotSizeAcres(0.5, 'Acres')).toBe(0.5);
       expect(lotSizeAcres(1.0499, 'Acres')).toBe(1.05);
@@ -411,6 +416,13 @@ describe('formatListing', () => {
       expect(lotSizeAcres(null, 'Square Feet')).toBeNull();
       expect(lotSizeAcres(0, 'Acres')).toBeNull();
       expect(lotSizeAcres(NaN, 'Square Feet')).toBeNull();
+    });
+    // A positive lot that rounds to 0 acres (e.g. a 200 sq ft micro-lot)
+    // must come back null, never 0 — same "never 0" invariant as a
+    // missing/zero lot. The smallest non-null is ~218 sq ft → 0.01.
+    it('returns null (not 0) when a positive lot rounds to 0 acres', () => {
+      expect(lotSizeAcres(200, 'Square Feet')).toBeNull();
+      expect(lotSizeAcres(200, 'Square Feet')).not.toBe(0);
     });
     it('returns null for unknown / missing units rather than guessing', () => {
       const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);

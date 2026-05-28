@@ -265,10 +265,12 @@ const SQFT_PER_ACRE = 43_560;
  *   - "Square Feet" / "SquareFeet" / "Square Foot" → area / 43560, 2 dp.
  *
  * Null-safe: returns `null` (never `0`) when the area is missing,
- * non-numeric, or `0` (a `0` lot is treated as absent — condos / missing
- * data — matching how `lot_size` itself is omitted rather than reporting
- * a real "0 acre" lot). Returns `null` (with a stderr warning) when the
- * units string isn't recognized, rather than guessing.
+ * non-numeric, `0`, or a positive value that rounds to `0` acres (a tiny
+ * micro-lot — the smallest non-null is ~218 sq ft → 0.01). A `0` lot is
+ * treated as absent — condos / missing data — matching how `lot_size`
+ * itself is omitted rather than reporting a real "0 acre" lot. Returns
+ * `null` (with a stderr warning) when the units string isn't recognized,
+ * rather than guessing.
  */
 export function lotSizeAcres(
   area: number | undefined | null,
@@ -295,7 +297,12 @@ export function lotSizeAcres(
       );
       return null;
   }
-  return Math.round(acres * 100) / 100;
+  const rounded = Math.round(acres * 100) / 100;
+  // Guard the "never 0" invariant: a positive lot that rounds to 0 (a tiny
+  // micro-lot, e.g. 200 sq ft) reports `null`, not `0` — consistent with how
+  // an absent/zero lot is nulled above. The smallest non-null is ~218 sq ft
+  // → 0.01.
+  return rounded > 0 ? rounded : null;
 }
 
 /**
