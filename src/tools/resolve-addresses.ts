@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
 import { textResult } from '../mcp.js';
 import {
+  buildAddressQuery,
   resolveByAddressOnce,
   type ByAddressInput,
   type ByAddressResult,
@@ -120,9 +121,7 @@ export function registerResolveAddressesTools(
           return {
             resolved: false,
             error: e instanceof Error ? e.message : String(e),
-            query: [a.address, a.city, a.state, a.zip]
-              .filter((p): p is string => Boolean(p && p.trim()))
-              .join(', '),
+            query: buildAddressQuery(a),
           } satisfies ResolveRow;
         }
       });
