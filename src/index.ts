@@ -40,6 +40,7 @@ import { registerMortgageTools } from './tools/mortgage.js';
 import { registerAffordabilityTools } from './tools/affordability.js';
 import { registerHealthcheckTools } from './tools/healthcheck.js';
 import { registerByAddressTools } from './tools/by-address.js';
+import { registerResolveAddressesTools } from './tools/resolve-addresses.js';
 import { registerAuthTools } from './tools/auth.js';
 import type { OneHomeTransport } from './transport.js';
 
@@ -91,6 +92,7 @@ registerMortgageTools(server);
 registerAffordabilityTools(server);
 registerHealthcheckTools(server, client);
 registerByAddressTools(server, client);
+registerResolveAddressesTools(server, client);
 registerAuthTools(server, client);
 
 const modeBanner = {
