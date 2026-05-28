@@ -8,7 +8,11 @@ import type { RawListingDetail } from '../../src/format.js';
 function sampleListing(
   id: string,
   price: number,
-  opts: { withDescription?: boolean } = {}
+  opts: {
+    withDescription?: boolean;
+    lotSizeArea?: number;
+    lotSizeUnits?: string;
+  } = {}
 ): RawListingDetail {
   return {
     id,
@@ -27,6 +31,9 @@ function sampleListing(
       StandardStatus: 'Active',
       Latitude: 35.4,
       Longitude: -82.2,
+      ...(opts.lotSizeArea !== undefined
+        ? { LotSizeArea: opts.lotSizeArea, LotSizeUnits: opts.lotSizeUnits }
+        : {}),
       ...(opts.withDescription
         ? { PublicRemarks: 'Lakefront beauty with private dock.' }
         : {}),
@@ -111,6 +118,34 @@ describe('onehome_bulk_get', () => {
     expect(result.rows?.[1]?.property).toBeUndefined();
     expect(result.rows?.[1]?.listing_id).toBe('BAD');
     expect(result.rows?.[2]?.property?.listing_id).toBe('C');
+  });
+
+  it('flows lot_size_acres through per row: Square-Feet lot → acres, condo → null (issue #82)', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingById', (vars) => {
+      const id = vars.listingId as string;
+      // SFH carries a 45,738 sqft lot; condo carries no lot at all.
+      const listing =
+        id === 'SFH'
+          ? sampleListing(id, 600000, {
+              lotSizeArea: 45_738,
+              lotSizeUnits: 'Square Feet',
+            })
+          : sampleListing(id, 300000);
+      return ok({ listingDetail: listing });
+    });
+    const result = await runBulkGet(transport, {
+      group_id: 'g1',
+      listing_ids: ['SFH', 'CONDO'],
+    });
+    const sfh = result.rows?.find((r) => r.listing_id === 'SFH')?.property;
+    const condo = result.rows?.find((r) => r.listing_id === 'CONDO')?.property;
+    expect(sfh?.lot_size).toEqual({ area: 45_738, units: 'Square Feet' });
+    expect(sfh?.lot_size_acres).toBe(1.05);
+    // Condo: no lot → acres null, never 0.
+    expect(condo?.lot_size).toBeUndefined();
+    expect(condo?.lot_size_acres).toBeNull();
+    expect(condo?.lot_size_acres).not.toBe(0);
   });
 
   it('does not include a summary block (structured rows only)', async () => {

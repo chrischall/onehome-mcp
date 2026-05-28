@@ -33,6 +33,8 @@ const SUMMARY_FIELDS: Array<keyof FormattedListing> = [
   'beds',
   'baths',
   'living_area_sqft',
+  'lot_size',
+  'lot_size_acres',
   'year_built',
   'status',
   'hoa_fee',

@@ -143,6 +143,15 @@ export interface FormattedListing {
   baths?: number;
   living_area_sqft?: number;
   lot_size?: { area: number; units: string };
+  /**
+   * Lot size in acres, derived from `lot_size.{area, units}` — acreage is
+   * the unit that matters for rural/mountain/land listings. Unit-aware:
+   * an already-`Acres` lot is rounded to 2 dp; a `Square Feet` lot is
+   * `round(area / 43560, 2)`. `null` (never `0`) when the lot is
+   * absent/zero or the units aren't recognized (condos, missing data).
+   * (Issue #82.)
+   */
+  lot_size_acres?: number | null;
   year_built?: number;
   latitude?: number;
   longitude?: number;
@@ -239,6 +248,54 @@ export function hoaToMonthlyUsd(
       return null;
   }
   return Math.round(monthly);
+}
+
+/** Square feet in one acre. */
+const SQFT_PER_ACRE = 43_560;
+
+/**
+ * Derive lot size in acres from OneHome's unit-tagged lot size, rounded
+ * to 2 dp (issue #82). Acreage is the unit that matters for
+ * rural/mountain/land listings, but OneHome reports lot size as a
+ * `{area, units}` pair where `units` is the RESO `LotSizeUnits` enum
+ * (commonly "Acres" or "Square Feet"), so the conversion is unit-aware
+ * rather than a blind sqft/43560.
+ *
+ *   - "Acres" (any case, with/without trailing s) → area, rounded to 2 dp.
+ *   - "Square Feet" / "SquareFeet" / "Square Foot" → area / 43560, 2 dp.
+ *
+ * Null-safe: returns `null` (never `0`) when the area is missing,
+ * non-numeric, or `0` (a `0` lot is treated as absent — condos / missing
+ * data — matching how `lot_size` itself is omitted rather than reporting
+ * a real "0 acre" lot). Returns `null` (with a stderr warning) when the
+ * units string isn't recognized, rather than guessing.
+ */
+export function lotSizeAcres(
+  area: number | undefined | null,
+  units: string | undefined | null
+): number | null {
+  if (typeof area !== 'number' || !Number.isFinite(area) || area <= 0) {
+    return null;
+  }
+  const normalized = (units ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  let acres: number;
+  switch (normalized) {
+    case 'acres':
+    case 'acre':
+      acres = area;
+      break;
+    case 'squarefeet':
+    case 'squarefoot':
+    case 'sqft':
+      acres = area / SQFT_PER_ACRE;
+      break;
+    default:
+      console.error(
+        `[onehome-mcp] lot_size_acres: unrecognized LotSizeUnits "${units ?? ''}" — returning null`
+      );
+      return null;
+  }
+  return Math.round(acres * 100) / 100;
 }
 
 /**
@@ -365,6 +422,10 @@ export function formatListing(
       units: p.LotSizeUnits ?? 'unspecified',
     };
   }
+  // lot_size_acres is always present — `null` (never `0`) for condos /
+  // missing lot data or unrecognized units. Unit-aware: derived from the
+  // raw {area, units}, converting Square Feet → acres. (Issue #82.)
+  out.lot_size_acres = lotSizeAcres(p.LotSizeArea, p.LotSizeUnits);
   if (typeof p.YearBuilt === 'number') out.year_built = p.YearBuilt;
   if (typeof p.Latitude === 'number') out.latitude = p.Latitude;
   if (typeof p.Longitude === 'number') out.longitude = p.Longitude;

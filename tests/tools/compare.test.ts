@@ -17,6 +17,8 @@ const A: FormattedListing = {
   living_area_sqft: 1500,
   price_per_sqft: 400,
   status: 'Active',
+  lot_size: { area: 0.5, units: 'Acres' },
+  lot_size_acres: 0.5,
   hoa_fee: { amount: 500, frequency: 'Annually' },
   tax_annual: 2000,
 };
@@ -34,6 +36,7 @@ const B: FormattedListing = {
   living_area_sqft: 2000,
   price_per_sqft: 400,
   status: 'Pending',
+  lot_size_acres: null,
   tax_annual: 2500,
 };
 
@@ -49,6 +52,15 @@ describe('buildSummary', () => {
       '2 Lake Way, Lake Lure, NC, 28746',
     ]);
     expect(byField.status).toEqual(['Active', 'Pending']);
+  });
+
+  it('includes lot_size (object) + lot_size_acres (number|null) in the summary (issue #82)', () => {
+    const summary = buildSummary([{ property: A }, { property: B }]);
+    const byField = Object.fromEntries(summary.map((r) => [r.field, r.values]));
+    // Raw lot_size stays an object (per-row fidelity, issue #18); B has none.
+    expect(byField.lot_size).toEqual([{ area: 0.5, units: 'Acres' }, null]);
+    // Derived acres: A=0.5, condo B=null (never 0).
+    expect(byField.lot_size_acres).toEqual([0.5, null]);
   });
 
   it('keeps hoa_fee as an object (not a JSON-encoded string) so it matches per-row shape (issue #18)', () => {
@@ -91,6 +103,8 @@ const RAW_A = {
     ListPrice: 600000,
     BedroomsTotal: 3,
     BathroomsTotalInteger: 2,
+    LotSizeArea: 45_738,
+    LotSizeUnits: 'Square Feet',
     AssociationFee: 600,
     AssociationFeeFrequency: 'Annually',
     TaxAnnualAmount: 2000,
@@ -162,6 +176,10 @@ describe('onehome_compare_properties summary opt-in (issue #18)', () => {
       // Per issue #18, hoa_fee must be a real object — not a JSON-encoded string.
       expect(hoaRow.values[0]).toEqual({ amount: 600, frequency: 'Annually' });
       expect(hoaRow.values[1]).toBeNull();
+      // #82: A's Square-Feet lot (45,738) → 1.05 acres; condo B → null.
+      const acresRow = summary.find((r) => r.field === 'lot_size_acres')!;
+      expect(acresRow.values[0]).toBe(1.05);
+      expect(acresRow.values[1]).toBeNull();
     } finally {
       await harness.close();
     }
