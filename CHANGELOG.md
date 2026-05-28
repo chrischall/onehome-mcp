@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/chrischall/onehome-mcp/compare/v0.9.0...v0.10.0) (2026-05-28)
+
+
+### Features
+
+* add onehome_resolve_addresses (bulk parity with cohort, closes [#42](https://github.com/chrischall/onehome-mcp/issues/42)) ([#43](https://github.com/chrischall/onehome-mcp/issues/43)) ([9b3634f](https://github.com/chrischall/onehome-mcp/commit/9b3634f007bb9e4606c4353920d4ef91d0711648))
+* **resolve:** add search-fallback rung (closes [#44](https://github.com/chrischall/onehome-mcp/issues/44)) ([#47](https://github.com/chrischall/onehome-mcp/issues/47)) ([451e0c1](https://github.com/chrischall/onehome-mcp/commit/451e0c1d8845ff87a1d4bf66d1144b756861dcf7))
+
 ## [0.9.0](https://github.com/chrischall/onehome-mcp/compare/v0.8.0...v0.9.0) (2026-05-27)
 
 
