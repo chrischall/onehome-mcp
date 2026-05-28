@@ -12,9 +12,9 @@ import {
 /**
  * `onehome_resolve_addresses` — bulk address-to-URL resolver. Mirrors
  * the cohort's structured-row shape (compass/redfin/zillow) and walks
- * the *exact same* single rung as `onehome_get_by_address` via the
+ * the *exact same* 2-rung ladder as `onehome_get_by_address` via the
  * shared `resolveByAddressOnce` helper, so the bulk path can't drift
- * from the single (parity discipline; issue #42).
+ * from the single (parity discipline).
  */
 
 export const RESOLVE_ADDRESSES_MAX = 100;
@@ -78,8 +78,11 @@ export function registerResolveAddressesTools(
         `Resolve up to ${RESOLVE_ADDRESSES_MAX} structured addresses to OneHome canonical portal URLs + listing OSK ids in one call. ` +
         'Each input is a `{address, city?, state?, zip?}` object. Output preserves input order; one row per input, ' +
         'either `{resolved: true, url, listing_id, address}` or `{resolved: false, error, query}`. ' +
-        'Walks the exact same `ListingSuggestionsSearch` rung as `onehome_get_by_address` (shared helper — bulk and single ' +
-        'cannot diverge). Concurrent fan-out capped at 6 in flight to avoid swamping the upstream. ' +
+        'Walks the exact same 2-rung ladder as `onehome_get_by_address` via the shared helper (rung 1: ' +
+        '`ListingSuggestionsSearch` against the magic-link saved-search scope; rung 2: search-fallback page-walking the ' +
+        'broader saved-search / raw-listings pool bounded by `groupId`) — bulk and single cannot diverge. ' +
+        'Each row surfaces `matched_via: "suggestions" | "search_fallback"` so callers see which rung produced the hit. ' +
+        'Concurrent fan-out capped at 6 in flight to avoid swamping the upstream. ' +
         'Per-row errors captured — one bad address never fails the whole batch. ' +
         '`group_id` defaults to the magic-link session context. Read-only; safe to call repeatedly.',
       annotations: {
