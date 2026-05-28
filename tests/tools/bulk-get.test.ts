@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { BRIDGE_CONCURRENCY, FetchproxyTimeoutError } from '@fetchproxy/server';
 import { OneHomeClient } from '../../src/client.js';
 import { registerBulkGetTools } from '../../src/tools/bulk-get.js';
 import { FakeTransport, ok, createTestHarness } from '../helpers.js';
@@ -188,6 +189,51 @@ describe('onehome_bulk_get', () => {
       listing_ids: [],
     });
     expect(res.isError).toBe(true);
+  });
+
+  it('wraps bridge timeouts with the canonical "bridge timeout after retry" prefix and retries once', async () => {
+    // Validates the @fetchproxy/server `retryOnceOnTimeout` + `classifyRowError`
+    // wiring: per-row bridge timeouts surface distinctly from upstream
+    // "no listing found"-style misses, which the cohort's bulk-summary
+    // reporting relies on (fetchproxy #69).
+    const transport = new FakeTransport();
+    let attempts = 0;
+    transport.on('ListingById', (vars) => {
+      const id = vars.listingId as string;
+      if (id === 'TIMEOUT') {
+        attempts++;
+        throw new FetchproxyTimeoutError({
+          url: 'https://services.onehome.com/graphql',
+          timeoutMs: 30000,
+        });
+      }
+      return ok({ listingDetail: sampleListing(id, 100000) });
+    });
+    const result = await runBulkGet(transport, {
+      group_id: 'g1',
+      listing_ids: ['A', 'TIMEOUT', 'C'],
+    });
+    expect(attempts).toBe(2); // initial + one retry
+    expect(result.rows?.[1]?.listing_id).toBe('TIMEOUT');
+    expect(result.rows?.[1]?.error).toMatch(/^bridge timeout after retry: /);
+    expect(result.rows?.[0]?.property?.listing_id).toBe('A');
+    expect(result.rows?.[2]?.property?.listing_id).toBe('C');
+  });
+
+  it('caps concurrency to BRIDGE_CONCURRENCY (=6) to avoid swamping the bridge', async () => {
+    const transport = new FakeTransport();
+    let inflight = 0;
+    let highWater = 0;
+    transport.on('ListingById', async (vars) => {
+      inflight++;
+      if (inflight > highWater) highWater = inflight;
+      await new Promise((r) => setImmediate(r));
+      inflight--;
+      return ok({ listingDetail: sampleListing(vars.listingId as string, 100000) });
+    });
+    const ids = Array.from({ length: 20 }, (_, i) => `id-${i}`);
+    await runBulkGet(transport, { group_id: 'g1', listing_ids: ids });
+    expect(highWater).toBeLessThanOrEqual(BRIDGE_CONCURRENCY);
   });
 
   it('rejects listing_ids[] longer than the documented cap', async () => {
