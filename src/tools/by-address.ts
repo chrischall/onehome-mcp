@@ -150,6 +150,9 @@ async function searchFallback(
         groupId,
         savedSearchId,
         listingIds,
+        // Cap at 200 — typical consumer-share saved searches have O(10-30)
+        // curated listings, so one page is enough. Larger saved searches would
+        // need a page-walk loop here.
         pageInput: { pageNum: 0, size: Math.min(200, listingIds.length) },
       })
     );
@@ -164,6 +167,9 @@ async function searchFallback(
     pool = data.listings?.listings ?? [];
   }
   for (const l of pool) {
+    // Skip id-less hits: without a listing id we can't build a usable result
+    // (mirrors the suggestions rung's `.find(s => s.id || s.listingId)` guard).
+    if (!l.id) continue;
     const haystack = listingHaystack(l);
     if (tokens.every((t) => haystack.includes(t))) return l;
   }
@@ -208,7 +214,8 @@ export async function resolveByAddressOnce(
   const ctx = client.bridgeStatus().sessionContext;
   const hit = await searchFallback(client, input, groupId, ctx.savedSearchId);
   if (hit) {
-    const listingId = (hit.id ?? '') as string;
+    // searchFallback() filters out id-less hits, so hit.id is non-empty here.
+    const listingId = hit.id as string;
     const address = formatListingAddress(hit) || query;
     const out: ResolvedByAddress = {
       resolved: true,
