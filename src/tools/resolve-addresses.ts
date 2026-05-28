@@ -27,6 +27,8 @@ interface ResolveRow {
   address?: string;
   error?: string;
   query?: string;
+  matched_via?: 'suggestions' | 'search_fallback';
+  matched_outside_saved_area?: boolean;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -49,12 +51,17 @@ async function mapWithConcurrency<T, R>(
 
 function toRow(result: ByAddressResult): ResolveRow {
   if (result.resolved) {
-    return {
+    const row: ResolveRow = {
       resolved: true,
       url: result.url,
       listing_id: result.listing_id,
       address: result.address,
+      matched_via: result.matched_via,
     };
+    if (result.matched_outside_saved_area) {
+      row.matched_outside_saved_area = true;
+    }
+    return row;
   }
   return { resolved: false, error: result.error, query: result.query };
 }

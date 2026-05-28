@@ -19,6 +19,8 @@ interface ResolveRow {
   address?: string;
   error?: string;
   query?: string;
+  matched_via?: 'suggestions' | 'search_fallback';
+  matched_outside_saved_area?: boolean;
 }
 
 interface ResolveResult {
@@ -246,6 +248,56 @@ describe('onehome_resolve_addresses', () => {
     expect(batch.rows?.[1]?.resolved).toBe(singleMiss.resolved);
     expect(batch.rows?.[1]?.error).toBe(singleMiss.error);
     expect(batch.rows?.[1]?.query).toBe(singleMiss.query);
+  });
+
+  it('bulk inherits the search-fallback rung when suggestions misses', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', (vars) => {
+      const q = vars.browseParameter as string;
+      if (q.startsWith('126 Sleeping Bear')) {
+        return ok({
+          listingSuggestionsSearch: [
+            { id: 'SUGG_HIT', city: 'Lake Lure', stateOrProvince: 'NC' },
+          ],
+        });
+      }
+      return ok({ listingSuggestionsSearch: [] });
+    });
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['FB'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'FB',
+              property: {
+                StreetNumber: '212',
+                StreetName: 'Ridgeway',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callResolve(transport, {
+      addresses: [
+        { address: '126 Sleeping Bear Ln', city: 'Lake Lure', state: 'NC' },
+        { address: '212 Ridgeway Rd', city: 'Lake Lure', state: 'NC' },
+      ],
+    });
+    expect(result.resolved).toBe(2);
+    expect(result.rows?.[0]?.matched_via).toBe('suggestions');
+    expect(result.rows?.[1]?.matched_via).toBe('search_fallback');
+    expect(result.rows?.[1]?.listing_id).toBe('FB');
   });
 
   it('caps concurrency to avoid swamping the upstream', async () => {
