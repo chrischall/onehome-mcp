@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { FetchproxyTimeoutError } from '@fetchproxy/server';
+import { BRIDGE_CONCURRENCY, FetchproxyTimeoutError } from '@fetchproxy/server';
 import { OneHomeClient } from '../../src/client.js';
 import { registerBulkGetTools } from '../../src/tools/bulk-get.js';
 import { FakeTransport, ok, createTestHarness } from '../helpers.js';
@@ -233,7 +233,7 @@ describe('onehome_bulk_get', () => {
     });
     const ids = Array.from({ length: 20 }, (_, i) => `id-${i}`);
     await runBulkGet(transport, { group_id: 'g1', listing_ids: ids });
-    expect(highWater).toBeLessThanOrEqual(6);
+    expect(highWater).toBeLessThanOrEqual(BRIDGE_CONCURRENCY);
   });
 
   it('rejects listing_ids[] longer than the documented cap', async () => {
