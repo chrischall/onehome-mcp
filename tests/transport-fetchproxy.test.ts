@@ -90,17 +90,18 @@ describe('FetchproxyTransport — capability declaration', () => {
     expect(constructorCalls[0]!.bridgeReviveDelayMs).toBeUndefined();
   });
 
-  it('opts into keepAliveIntervalMs=25_000 to keep SW resident across capture-mode token-refresh windows (fetchproxy#71)', async () => {
+  it('does NOT pass keepAliveIntervalMs (relies on the server-side 25s default)', async () => {
     // Onehome is Pattern B: the bridge handles a single one-shot
     // Authorization capture at startup, but it stays held open and is
     // hit again whenever the captured JWT expires (see graphql() →
     // ensureToken() recapture path). Without a keep-alive ping the
     // browser SW can evict between refreshes, forcing a lazy-revive
-    // round-trip on every token rollover. Pin the documented 25s
-    // cadence so we stay inside Chrome's 30s SW idle window.
+    // round-trip on every token rollover. We used to pin a 25s cadence
+    // here; @fetchproxy/server 0.10.0 now defaults keepAliveIntervalMs to
+    // exactly 25_000, so the adapter no longer passes it (fetchproxy#72).
     const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
     new FetchproxyTransport({ version: '0.0.0-test' });
-    expect(constructorCalls[0]!.keepAliveIntervalMs).toBe(25_000);
+    expect(constructorCalls[0]!.keepAliveIntervalMs).toBeUndefined();
   });
 });
 
