@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.0](https://github.com/chrischall/onehome-mcp/compare/v0.10.0...v0.11.0) (2026-05-29)
+
+
+### Features
+
+* + enhancement per the first-party-dep convention — a package we own ([a380825](https://github.com/chrischall/onehome-mcp/commit/a38082591bcf1f8c9b2804945347035cf1d9a3e9))
+* adopt @chrischall/realty-core 0.4.0 (marina place-name guard) ([#53](https://github.com/chrischall/onehome-mcp/issues/53)) ([6780101](https://github.com/chrischall/onehome-mcp/commit/67801010e9e120a9bfec46843ee926431f4324d9))
+* adopt @fetchproxy/server 0.10.0 — drop redundant keepAliveIntervalMs opt-in ([#72](https://github.com/chrischall/onehome-mcp/issues/72)) ([#51](https://github.com/chrischall/onehome-mcp/issues/51)) ([1b48963](https://github.com/chrischall/onehome-mcp/commit/1b4896392b8f97ff1b60dd7ef3886aac59be863c))
+* consume @chrischall/realty-core 0.3.1 — drop inline hoisted helpers ([#52](https://github.com/chrischall/onehome-mcp/issues/52)) ([a380825](https://github.com/chrischall/onehome-mcp/commit/a38082591bcf1f8c9b2804945347035cf1d9a3e9))
+* **properties:** add derived lot_size_acres ([#82](https://github.com/chrischall/onehome-mcp/issues/82)) ([#49](https://github.com/chrischall/onehome-mcp/issues/49)) ([2957238](https://github.com/chrischall/onehome-mcp/commit/2957238e5b992d20d1f0754d79d456c778329f1a))
+
 ## [0.10.0](https://github.com/chrischall/onehome-mcp/compare/v0.9.0...v0.10.0) (2026-05-28)
 
 

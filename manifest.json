@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "onehome-mcp",
   "display_name": "OneHome",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "OneHome (CoreLogic) real-estate access for Claude — search listings, fetch property details, photos, schools, and run mortgage / affordability math against your agent-shared OneHome portal",
   "author": {
     "name": "Chris Chall",
