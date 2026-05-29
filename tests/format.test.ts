@@ -182,8 +182,13 @@ describe('formatListing', () => {
       };
       const out = formatListing('X', raw);
       expect(out.hoa_monthly_usd).toBeNull();
+      // The warning now originates in the canonical realty-core
+      // `hoaToMonthlyUsd` (prefix `[realty-core]`, "unknown HOA
+      // frequency") rather than onehome's old inline copy — a documented
+      // delta of the migration. Assert on the stable, helper-agnostic
+      // substring so we tolerate exact wording.
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('hoa_monthly_usd')
+        expect.stringContaining('unknown HOA frequency')
       );
       warnSpy.mockRestore();
     });
@@ -282,15 +287,30 @@ describe('formatListing', () => {
       expect(out.price_drop_amount).toBeNull();
       expect(out.price_drop_percent).toBeNull();
     });
+
+    // Adapter contract over canonical `priceDrop(previous, current)`: a
+    // price RISE (current > previous) is not a drop, so both fields are
+    // null rather than a negative "drop".
+    it('returns null for a price rise (current > previous), never a negative drop', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { ListPrice: 520000, PreviousListPrice: 500000 },
+      };
+      const out = formatListing('X', raw);
+      expect(out.price_drop_amount).toBeNull();
+      expect(out.price_drop_percent).toBeNull();
+    });
   });
 
   describe('tax_annual placeholder cleanup (issue #17)', () => {
-    it('nulls out tax_annual when raw value is 1 (new-construction placeholder)', () => {
+    it('nulls out tax_annual and flags tax_status when raw value is 1 (new-construction placeholder)', () => {
       const raw: RawListingDetail = {
         id: 'X',
         property: { TaxAnnualAmount: 1 },
       };
-      expect(formatListing('X', raw).tax_annual).toBeNull();
+      const out = formatListing('X', raw);
+      expect(out.tax_annual).toBeNull();
+      expect(out.tax_status).toBe('not_yet_assessed');
     });
 
     it('nulls out tax_annual when raw value is 0', () => {
@@ -298,15 +318,43 @@ describe('formatListing', () => {
         id: 'X',
         property: { TaxAnnualAmount: 0 },
       };
-      expect(formatListing('X', raw).tax_annual).toBeNull();
+      const out = formatListing('X', raw);
+      expect(out.tax_annual).toBeNull();
+      expect(out.tax_status).toBe('not_yet_assessed');
     });
 
-    it('preserves real tax_annual values', () => {
+    // DELTA: onehome's old sentinel was `<= 1`; the canonical realty-core
+    // `cleanTaxAnnual` widens it to `< 10` (homes-mcp#17 — real new-build
+    // listings come back with 0–9 placeholders). So a raw `5` is now a
+    // not-yet-assessed placeholder rather than a real $5 assessment.
+    it('nulls out and flags a sub-$10 placeholder (canonical < 10 sentinel)', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { TaxAnnualAmount: 5 },
+      };
+      const out = formatListing('X', raw);
+      expect(out.tax_annual).toBeNull();
+      expect(out.tax_status).toBe('not_yet_assessed');
+    });
+
+    it('preserves a real tax_annual at the >= 10 boundary, with no tax_status', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: { TaxAnnualAmount: 10 },
+      };
+      const out = formatListing('X', raw);
+      expect(out.tax_annual).toBe(10);
+      expect(out.tax_status).toBeUndefined();
+    });
+
+    it('preserves real tax_annual values and omits tax_status', () => {
       const raw: RawListingDetail = {
         id: 'X',
         property: { TaxAnnualAmount: 2100 },
       };
-      expect(formatListing('X', raw).tax_annual).toBe(2100);
+      const out = formatListing('X', raw);
+      expect(out.tax_annual).toBe(2100);
+      expect(out.tax_status).toBeUndefined();
     });
 
     it('omits tax_is_estimated when upstream has no estimate flag', () => {
