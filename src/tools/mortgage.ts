@@ -1,26 +1,18 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { calculateMortgage } from '@chrischall/realty-core';
 import { textResult } from '../mcp.js';
 
 /**
  * Local-only mortgage / PITI calculator. No network — fully
- * deterministic. Same math used by zillow-mcp / redfin-mcp /
- * compass-mcp / homes-mcp; kept here so a OneHome-only session can
- * run scenarios without juggling tool surfaces.
+ * deterministic. The PITI math is hoisted to the canonical
+ * `calculateMortgage` in `@chrischall/realty-core` (shared with
+ * zillow-mcp / redfin-mcp / compass-mcp / homes-mcp); this tool is a
+ * thin adapter that maps the canonical breakdown back to onehome's
+ * leaner output shape (`monthly_total_piti` / `total_interest_over_term`
+ * and an `ltv` ratio) so the tool surface is unchanged. Kept here so a
+ * OneHome-only session can run scenarios without juggling tool surfaces.
  */
-
-function monthlyPI(loan: number, annualRate: number, years: number): number {
-  if (loan <= 0) return 0;
-  if (annualRate <= 0) return loan / (years * 12);
-  const r = annualRate / 100 / 12;
-  const n = years * 12;
-  return (loan * r) / (1 - Math.pow(1 + r, -n));
-}
-
-function round(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
 export function registerMortgageTools(server: McpServer): void {
   server.registerTool(
     'onehome_calculate_mortgage',
@@ -56,35 +48,23 @@ export function registerMortgageTools(server: McpServer): void {
       },
     },
     async (i) => {
-      const term = i.loan_term_years ?? 30;
-      const downPmt =
-        i.down_payment ?? (i.home_price * (i.down_payment_percent ?? 20)) / 100;
-      const loan = Math.max(0, i.home_price - downPmt);
-      const pi = monthlyPI(loan, i.interest_rate, term);
-      const tax =
-        (i.property_tax_annual ??
-          (i.home_price * (i.property_tax_rate ?? 0)) / 100) /
-        12;
-      const ins = (i.insurance_annual ?? 0) / 12;
-      const hoa = i.hoa_monthly ?? 0;
-      const ltv = i.home_price > 0 ? loan / i.home_price : 0;
-      const pmi =
-        ltv > 0.8 && i.pmi_rate ? (loan * (i.pmi_rate / 100)) / 12 : 0;
-      const total = pi + tax + ins + hoa + pmi;
-      const totalInterest = pi * term * 12 - loan;
+      const m = calculateMortgage(i);
+      // Map the canonical (zillow-union) breakdown back to onehome's
+      // leaner shape: `monthly_total_piti` / `total_interest_over_term`
+      // and `ltv` as a 0..1 ratio (canonical reports `ltv_percent` 0..100).
       return textResult({
-        home_price: i.home_price,
-        down_payment: downPmt,
-        loan_amount: loan,
-        ltv,
-        monthly_principal_interest: round(pi),
-        monthly_property_tax: round(tax),
-        monthly_insurance: round(ins),
-        monthly_hoa: hoa,
-        monthly_pmi: round(pmi),
-        monthly_total_piti: round(total),
-        total_interest_over_term: round(totalInterest),
-        loan_term_years: term,
+        home_price: m.home_price,
+        down_payment: m.down_payment,
+        loan_amount: m.loan_amount,
+        ltv: m.ltv_percent / 100,
+        monthly_principal_interest: m.monthly_principal_interest,
+        monthly_property_tax: m.monthly_property_tax,
+        monthly_insurance: m.monthly_insurance,
+        monthly_hoa: m.monthly_hoa,
+        monthly_pmi: m.monthly_pmi,
+        monthly_total_piti: m.monthly_total,
+        total_interest_over_term: m.total_interest_paid,
+        loan_term_years: m.loan_term_years,
       });
     }
   );

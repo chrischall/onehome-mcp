@@ -4,7 +4,17 @@
  * expose to MCP callers. Keeps each tool file thin.
  */
 
+import {
+  hoaToMonthlyUsd,
+  daysSince,
+  priceDrop,
+  sqftToAcres,
+  cleanTaxAnnual,
+  collectAddressAlternates,
+} from '@chrischall/realty-core';
 import { extractFeatures, loadCommunities, type ExtractedFeatures } from './features.js';
+
+export { hoaToMonthlyUsd, daysSince } from '@chrischall/realty-core';
 
 export interface FormatOptions {
   /**
@@ -165,8 +175,20 @@ export interface FormattedListing {
    * `null` when the frequency is unknown or no fee is reported. (Issue #15.)
    */
   hoa_monthly_usd?: number | null;
-  /** `null` when raw value is the 0/1 not-yet-assessed placeholder. (Issue #17.) */
+  /**
+   * Annual property tax. `null` when the raw figure is the
+   * not-yet-assessed placeholder portals surface on new construction.
+   * The sentinel threshold is the canonical realty-core `< 10` (wider
+   * than the old `<= 1` — real new-build listings come back with 0–9
+   * placeholders, homes-mcp#17). (Issue #17.)
+   */
   tax_annual?: number | null;
+  /**
+   * `'not_yet_assessed'` when `tax_annual` was nulled out by the
+   * sub-$10 placeholder; omitted otherwise. Surfaced so callers get the
+   * assessment-status signal rather than an ambiguous `null`. (Issue #17.)
+   */
+  tax_status?: 'not_yet_assessed';
   tax_year?: number;
   description?: string;
   extracted_features?: ExtractedFeatures;
@@ -215,45 +237,6 @@ export function buildPortalUrlHyperlink(listingId: string): string {
 }
 
 /**
- * Convert an HOA `{amount, frequency}` to monthly USD, rounded to the
- * nearest dollar. Returns `null` for unknown frequency strings (with a
- * stderr warning) or when the inputs are absent. (Issue #15.)
- */
-export function hoaToMonthlyUsd(
-  amount: number | undefined,
-  frequency: string | undefined
-): number | null {
-  if (typeof amount !== 'number' || !frequency) return null;
-  let monthly: number;
-  switch (frequency) {
-    case 'Monthly':
-      monthly = amount;
-      break;
-    case 'Annually':
-      monthly = amount / 12;
-      break;
-    case 'Quarterly':
-      monthly = amount / 3;
-      break;
-    case 'SemiAnnually':
-      monthly = amount / 6;
-      break;
-    case 'Weekly':
-      monthly = (amount * 52) / 12;
-      break;
-    default:
-      console.error(
-        `[onehome-mcp] hoa_monthly_usd: unknown AssociationFeeFrequency "${frequency}" — returning null`
-      );
-      return null;
-  }
-  return Math.round(monthly);
-}
-
-/** Square feet in one acre. */
-const SQFT_PER_ACRE = 43_560;
-
-/**
  * Derive lot size in acres from OneHome's unit-tagged lot size, rounded
  * to 2 dp (issue #82). Acreage is the unit that matters for
  * rural/mountain/land listings, but OneHome reports lot size as a
@@ -271,6 +254,13 @@ const SQFT_PER_ACRE = 43_560;
  * itself is omitted rather than reporting a real "0 acre" lot. Returns
  * `null` (with a stderr warning) when the units string isn't recognized,
  * rather than guessing.
+ *
+ * Thin unit-aware wrapper over the canonical sqft-only `sqftToAcres`
+ * (realty-core): the Square-Feet branch delegates to it (which carries
+ * the same round-to-2dp + tiny-lot guard), and the Acres branch rounds
+ * to 2 dp with the identical "never 0" guard. The canonical helper is
+ * deliberately sqft-only; onehome's RESO `LotSizeUnits` feed needs this
+ * wrapper because a lot may already be expressed in acres.
  */
 export function lotSizeAcres(
   area: number | undefined | null,
@@ -280,78 +270,27 @@ export function lotSizeAcres(
     return null;
   }
   const normalized = (units ?? '').trim().toLowerCase().replace(/\s+/g, '');
-  let acres: number;
   switch (normalized) {
     case 'acres':
-    case 'acre':
-      acres = area;
-      break;
+    case 'acre': {
+      // Already acres — round to 2 dp with the same "never 0" guard the
+      // canonical sqft helper applies, so a sub-0.005 acre lot reports
+      // `null` rather than a misleading `0`.
+      const rounded = Math.round(area * 100) / 100;
+      return rounded > 0 ? rounded : null;
+    }
     case 'squarefeet':
     case 'squarefoot':
     case 'sqft':
-      acres = area / SQFT_PER_ACRE;
-      break;
+      // Square feet — delegate to the canonical converter (round-to-2dp
+      // + tiny-lot `null` guard live there).
+      return sqftToAcres(area);
     default:
       console.error(
         `[onehome-mcp] lot_size_acres: unrecognized LotSizeUnits "${units ?? ''}" — returning null`
       );
       return null;
   }
-  const rounded = Math.round(acres * 100) / 100;
-  // Guard the "never 0" invariant: a positive lot that rounds to 0 (a tiny
-  // micro-lot, e.g. 200 sq ft) reports `null`, not `0` — consistent with how
-  // an absent/zero lot is nulled above. The smallest non-null is ~218 sq ft
-  // → 0.01.
-  return rounded > 0 ? rounded : null;
-}
-
-/**
- * Days between `at` (an ISO timestamp) and now, floored. Returns null
- * if the timestamp is missing or unparseable.
- */
-export function daysSince(at: string | undefined): number | null {
-  if (!at) return null;
-  const t = Date.parse(at);
-  if (Number.isNaN(t)) return null;
-  const delta = Date.now() - t;
-  return Math.floor(delta / 86_400_000);
-}
-
-/**
- * Normalize an address for equality checks — collapse whitespace, drop
- * punctuation, and lowercase. Used to dedupe `address_alternates`
- * against the primary `address_full`.
- */
-function normalizeAddressForCompare(s: string | undefined): string {
-  if (!s) return '';
-  return s.toLowerCase().replace(/[,#.]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-/**
- * Collect alternate address strings from the raw payload, excluding any
- * that match the primary. Currently sources from
- * `customProperty.UnparsedAddress` (the only flat-string address we see
- * on `services.onehome.com`); returns an empty array when no other
- * sources surface anything. (Issue #25.)
- */
-export function collectAddressAlternates(
-  primary: string | undefined,
-  cp: RawCustomProperty
-): string[] {
-  const primaryNorm = normalizeAddressForCompare(primary);
-  const candidates: string[] = [];
-  if (cp.UnparsedAddress) candidates.push(cp.UnparsedAddress);
-  const seen = new Set<string>();
-  const alternates: string[] = [];
-  for (const candidate of candidates) {
-    const norm = normalizeAddressForCompare(candidate);
-    if (!norm) continue;
-    if (norm === primaryNorm) continue;
-    if (seen.has(norm)) continue;
-    seen.add(norm);
-    alternates.push(candidate);
-  }
-  return alternates;
 }
 
 export function formatListing(
@@ -385,8 +324,11 @@ export function formatListing(
   // address_alternates: pick up any flat MLS-feed address that disagrees
   // with the primary we built from StreetNumber/StreetName/etc.
   // (Issue #25 — pinned for now to customProperty.UnparsedAddress;
-  // omitted entirely when nothing alternate is present.)
-  const alternates = collectAddressAlternates(addressFull, cp);
+  // omitted entirely when nothing alternate is present.) onehome is the
+  // thin gather-then-call wrapper over the canonical realty-core helper:
+  // it supplies the portal's candidate list (just UnparsedAddress here),
+  // the canonical handles the normalize/dedup-against-primary.
+  const alternates = collectAddressAlternates(addressFull, [cp.UnparsedAddress]);
   if (alternates.length > 0) out.address_alternates = alternates;
   if (street) out.street = street;
   if (city) out.city = city;
@@ -396,21 +338,15 @@ export function formatListing(
   if (typeof p.ClosePrice === 'number') out.close_price = p.ClosePrice;
   if (typeof p.PreviousListPrice === 'number')
     out.previous_list_price = p.PreviousListPrice;
-  // price_drop_*: null when either side of the math is missing.
-  // (Issue #16.)
-  if (
-    typeof p.ListPrice === 'number' &&
-    typeof p.PreviousListPrice === 'number' &&
-    p.PreviousListPrice > 0
-  ) {
-    const drop = p.PreviousListPrice - p.ListPrice;
-    out.price_drop_amount = drop;
-    out.price_drop_percent =
-      Math.round((drop / p.PreviousListPrice) * 1000) / 10;
-  } else {
-    out.price_drop_amount = null;
-    out.price_drop_percent = null;
-  }
+  // price_drop_*: derived from the canonical realty-core `priceDrop`,
+  // reshaped to onehome's two flat fields. Canonical arg order is
+  // `(previous, current)` and it returns a single `{amount, percent}`
+  // (or `null` for no real drop — missing input, or current >= previous);
+  // onehome splits that into `price_drop_amount` / `price_drop_percent`,
+  // both `null` when there is no drop. (Issue #16.)
+  const drop = priceDrop(p.PreviousListPrice, p.ListPrice);
+  out.price_drop_amount = drop?.amount ?? null;
+  out.price_drop_percent = drop?.percent ?? null;
   const sqft = p.LivingAreaTotal ?? p.LivingArea ?? p.BuildingAreaTotal;
   if (typeof sqft === 'number') {
     out.living_area_sqft = sqft;
@@ -462,12 +398,16 @@ export function formatListing(
   // hoa_monthly_usd is always present — `null` for unknown frequency or
   // missing fee. (Issue #15.)
   out.hoa_monthly_usd = hoaToMonthlyUsd(p.AssociationFee, p.AssociationFeeFrequency);
-  // tax_annual: 0 and 1 are not-yet-assessed placeholders (new
-  // construction). Null them out so callers don't treat $1 as real.
+  // tax_annual: low values are not-yet-assessed placeholders (new
+  // construction). The canonical realty-core `cleanTaxAnnual` nulls them
+  // out and returns the assessment status; onehome adopts its wider
+  // `< 10` sentinel (vs the old `<= 1`) and surfaces `tax_status`.
   // (Issue #17.) tax_is_estimated is omitted until upstream surfaces a
   // county-estimate marker — guessing would be worse than absent.
   if (typeof p.TaxAnnualAmount === 'number') {
-    out.tax_annual = p.TaxAnnualAmount <= 1 ? null : p.TaxAnnualAmount;
+    const { tax_annual, tax_status } = cleanTaxAnnual(p.TaxAnnualAmount);
+    out.tax_annual = tax_annual;
+    if (tax_status) out.tax_status = tax_status;
   }
   if (typeof p.TaxYear === 'number') out.tax_year = p.TaxYear;
   // Always compute extracted_features (cheap, useful) so callers can
