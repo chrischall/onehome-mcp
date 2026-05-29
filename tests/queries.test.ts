@@ -77,24 +77,39 @@ describe('query builders', () => {
     expect(req.variables?.suppressEvent).toBe(true);
   });
 
-  // Schema drift (issue #54): OneHome removed `UnparsedAddress` from the
-  // `CustomProperty` type. Selecting it fails the whole document with
-  // FieldUndefined, breaking every listing fetch. Pin that neither query
-  // selects it, while the still-valid customProperty fields remain.
-  it('ListingById no longer selects the removed customProperty.UnparsedAddress field', () => {
+  // Issue #25 restored (regression from #56): in OneHome's live schema
+  // `UnparsedAddress` is a field on the parent listing type
+  // (`listingDetail` level) — a SIBLING of `customProperty`, alongside the
+  // RESO address fields — NOT a field of `CustomProperty`. PR #56 correctly
+  // removed it from the `customProperty {}` block (where it was undefined);
+  // it must be re-added at the listingDetail level so `address_alternates`
+  // is restored. Pin that it is selected as a sibling of `customProperty`
+  // and is NOT nested inside the `customProperty {}` block.
+  it('ListingById selects UnparsedAddress at the listingDetail level, sibling of customProperty', () => {
     const req = buildListingById({ listingId: 'L', groupId: 'G' });
-    expect(req.query).not.toContain('UnparsedAddress');
+    expect(req.query).toContain('UnparsedAddress');
     expect(req.query).toContain('customProperty {');
     expect(req.query).toContain('ListingKey');
     expect(req.query).toContain('FIPSCode');
+    // It must NOT be nested inside the customProperty selection.
+    const cpBlock = req.query.slice(
+      req.query.indexOf('customProperty {'),
+      req.query.indexOf('}', req.query.indexOf('customProperty {'))
+    );
+    expect(cpBlock).not.toContain('UnparsedAddress');
   });
 
-  it('GetListings (listingCard fragment) no longer selects UnparsedAddress', () => {
+  it('GetListings (listingCard fragment) selects UnparsedAddress as a sibling of customProperty', () => {
     const req = buildGetListings({ groupId: 'g1' });
-    expect(req.query).not.toContain('UnparsedAddress');
+    expect(req.query).toContain('UnparsedAddress');
     expect(req.query).toContain('customProperty {');
     expect(req.query).toContain('ListingKey');
     expect(req.query).toContain('FIPSCode');
+    const cpBlock = req.query.slice(
+      req.query.indexOf('customProperty {'),
+      req.query.indexOf('}', req.query.indexOf('customProperty {'))
+    );
+    expect(cpBlock).not.toContain('UnparsedAddress');
   });
 
   it('MediaListingById queries the listingDetail media field', () => {

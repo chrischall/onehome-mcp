@@ -297,6 +297,54 @@ describe('onehome_get_by_address — search-fallback rung', () => {
     expect(result.address).toContain('Ridgeway');
   });
 
+  // Issue #25 restored (regression from #56): the fuzzy haystack again
+  // includes the listingDetail-level `UnparsedAddress` (a sibling of
+  // customProperty). Pin that a fallback hit can resolve on a token that
+  // lives ONLY in UnparsedAddress, not in the structured street fields.
+  it('search-fallback haystack includes the listing-level UnparsedAddress', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['EYx111'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'EYx111',
+              property: {
+                StreetNumber: '212',
+                StreetName: 'Ridgeway',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+                PostalCode: '28746',
+              },
+              // The distinctive token "Quarry" appears ONLY here, at the
+              // listingDetail level — proving the haystack reads it again.
+              UnparsedAddress: '212 Quarry Ridgeway Rd, Lake Lure, NC 28746',
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: 'Quarry Ridgeway',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('EYx111');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+
   it('fuzzy-matches the right listing when the fallback pool has multiple hits', async () => {
     const transport = new FakeTransport();
     transport.setStatus({

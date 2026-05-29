@@ -480,7 +480,7 @@ describe('formatListing', () => {
     });
   });
 
-  describe('address_alternates (issue #25, degraded — issue #54)', () => {
+  describe('address_alternates (issue #25, restored)', () => {
     it('omits the field when upstream has no alternate address sources', () => {
       // Pin: until upstream exposes an MLS-specific alternate address feed,
       // the field is absent rather than emitted as an empty array.
@@ -488,11 +488,53 @@ describe('formatListing', () => {
       expect('address_alternates' in out).toBe(false);
     });
 
-    // Schema drift (issue #54): OneHome removed `customProperty.UnparsedAddress`
-    // — the SOLE candidate source for address_alternates. We no longer select
-    // it (the document would fail validation), so the feature degrades to
-    // "no alternates" rather than crashing. formatListing must produce a valid
-    // result with the field absent.
+    // Issue #25 restored (regression from #56): in OneHome's live schema
+    // `UnparsedAddress` lives at the listingDetail level (a sibling of
+    // `customProperty`), NOT inside `customProperty`. It is the candidate
+    // source for `address_alternates`. PR #56 had degraded this to always
+    // empty; we read the relocated parent-level field again.
+    it('surfaces listingDetail.UnparsedAddress when distinct from the primary built address', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: {
+          StreetNumber: '109',
+          StreetName: 'Overlook Point',
+          StreetSuffix: 'Ln',
+          City: 'Lake Lure',
+          StateOrProvince: 'NC',
+          PostalCode: '28746',
+        },
+        // UnparsedAddress is a SIBLING of customProperty, on the parent
+        // listing type — not nested inside customProperty.
+        UnparsedAddress: '169 Overlook Point Ln, Lake Lure, NC 28746',
+        customProperty: { ListingKey: 'KEY-1', FIPSCode: '37161' },
+      };
+      const out = formatListing('X', raw);
+      expect(out.address_alternates).toEqual([
+        '169 Overlook Point Ln, Lake Lure, NC 28746',
+      ]);
+      // The customProperty fields keep flowing through independently.
+      expect(out.mls_listing_key).toBe('KEY-1');
+    });
+
+    it('omits the field when the alternate equals the primary address (case-insensitive)', () => {
+      const raw: RawListingDetail = {
+        id: 'X',
+        property: {
+          StreetNumber: '109',
+          StreetName: 'Overlook Point',
+          StreetSuffix: 'Ln',
+          City: 'Lake Lure',
+          StateOrProvince: 'NC',
+          PostalCode: '28746',
+        },
+        // Same as the primary but for street-portion CASE — still deduped.
+        UnparsedAddress: '109 OVERLOOK POINT LN, Lake Lure, NC 28746',
+      };
+      const out = formatListing('X', raw);
+      expect('address_alternates' in out).toBe(false);
+    });
+
     it('does not crash and omits address_alternates when UnparsedAddress is absent', () => {
       const raw: RawListingDetail = {
         id: 'X',
@@ -504,7 +546,7 @@ describe('formatListing', () => {
           StateOrProvince: 'NC',
           PostalCode: '28746',
         },
-        // customProperty present but WITHOUT UnparsedAddress (post-schema-drift).
+        // customProperty present, no UnparsedAddress at the listing level.
         customProperty: {
           ListingKey: 'KEY-1',
           FIPSCode: '37161',
@@ -515,7 +557,6 @@ describe('formatListing', () => {
         '109 Overlook Point Ln, Lake Lure, NC 28746'
       );
       expect('address_alternates' in out).toBe(false);
-      // The still-present customProperty fields keep flowing through.
       expect(out.mls_listing_key).toBe('KEY-1');
     });
 
