@@ -155,6 +155,18 @@ describe('extractFeatures', () => {
     it('matches "marina" → "marina"', () => {
       expect(extractFeatures('Marina slip included', baseCommunities).dock).toBe('marina');
     });
+    it('does NOT match place-name "marina" (Marina Bay / del Rey / Dr) — guard (#1)', () => {
+      // 0.4.0 marina place-name guard (ported from redfin-mcp): "marina"
+      // is a common place / street name; the negative lookahead rejects the
+      // usual address suffixes so addresses don't false-positive to 'marina'.
+      expect(extractFeatures('Marina Bay condo with skyline views', baseCommunities).dock).toBeNull();
+      expect(extractFeatures('Stunning home in Marina del Rey', baseCommunities).dock).toBeNull();
+      expect(extractFeatures('123 Marina Dr, lakeside neighborhood', baseCommunities).dock).toBeNull();
+    });
+    it('still matches genuine water-access "marina" prose — guard (#1)', () => {
+      expect(extractFeatures('Deep-water marina with boat access', baseCommunities).dock).toBe('marina');
+      expect(extractFeatures('Steps from the marina.', baseCommunities).dock).toBe('marina');
+    });
     it('matches "boat slip" → "boat_slip"', () => {
       expect(extractFeatures('Deeded boat slip', baseCommunities).dock).toBe('boat_slip');
     });
