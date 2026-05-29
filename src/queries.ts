@@ -96,6 +96,7 @@ fragment listingCard on ListingDetail {
       }
     }
   }
+  UnparsedAddress
   customProperty {
     ListingKey
     FIPSCode
@@ -398,6 +399,7 @@ query ListingById($listingId: String!, $groupId: String!, $savedSearchId: String
       VirtualTourURLUnbranded
       VirtualTourURLBranded
     }
+    UnparsedAddress
     customProperty {
       ListingKey
       FIPSCode

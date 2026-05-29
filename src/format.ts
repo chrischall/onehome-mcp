@@ -99,16 +99,6 @@ export interface RawCustomProperty {
   ListingKey?: string;
   ListingId?: string;
   FIPSCode?: string;
-  /**
-   * Schema drift (issue #54): OneHome removed `UnparsedAddress` from the
-   * `CustomProperty` GraphQL type — selecting it failed the whole document
-   * with `FieldUndefined`, breaking every listing fetch. The field is no
-   * longer queried, and was the SOLE candidate source for
-   * `address_alternates` (issue #25), so that feature is degraded to "no
-   * alternates" until the correct replacement field is confirmed via live
-   * schema introspection. Intentionally not declared here so no consumer
-   * silently re-references the removed field.
-   */
 }
 
 export interface RawListingDetail {
@@ -116,6 +106,16 @@ export interface RawListingDetail {
   createdAt?: string;
   hideWhenUnauth?: boolean;
   property?: RawProperty;
+  /**
+   * MLS-feed-supplied flat address string. Lives on the parent listing
+   * type (`listingDetail` level), a SIBLING of `customProperty` — NOT
+   * inside `customProperty` (issue #25; restores the placement PR #56
+   * had mistaken for a removal). Sometimes differs from the primary
+   * address we build from StreetNumber/StreetName/etc. (e.g. different
+   * MLS feeds for the same listing carry different parsings). Surface as
+   * `address_alternates` when it disagrees with the primary.
+   */
+  UnparsedAddress?: string;
   media?: RawMediaItem[];
   customProperty?: RawCustomProperty;
   rooms?: Array<Record<string, unknown>>;
@@ -324,18 +324,16 @@ export function formatListing(
     portal_url_hyperlink: buildPortalUrlHyperlink(listingId),
   };
   if (addressFull) out.address_full = addressFull;
-  // address_alternates (issue #25) is DEGRADED (issue #54). Its sole
-  // candidate source — `customProperty.UnparsedAddress` — was removed from
-  // OneHome's schema; selecting it failed the whole document with
-  // FieldUndefined, breaking every listing fetch. We no longer query it,
-  // and no other field on the current `customProperty`/`listingDetail`
-  // selection carries a distinct flat address (the structured street fields
-  // already build the *primary* `address_full`). So we feed the canonical
-  // realty-core gatherer an empty candidate list — it returns [] and the
-  // field is omitted — rather than crashing. The gather-then-call shape is
-  // preserved so the correct replacement field, once confirmed via live
-  // introspection, can be slotted back into the candidate list.
-  const alternates = collectAddressAlternates(addressFull, []);
+  // address_alternates: pick up any flat MLS-feed address that disagrees
+  // with the primary we built from StreetNumber/StreetName/etc.
+  // (Issue #25 — `listingDetail.UnparsedAddress`, a SIBLING of
+  // customProperty at the listing level, NOT inside customProperty; PR #56
+  // had mistaken its mis-nesting for a removal and degraded this to empty.)
+  // onehome is the thin gather-then-call wrapper over the canonical
+  // realty-core helper: it supplies the portal's candidate list (just
+  // UnparsedAddress here), the canonical handles the normalize/dedup-
+  // against-primary. Omitted entirely when nothing alternate is present.
+  const alternates = collectAddressAlternates(addressFull, [raw.UnparsedAddress]);
   if (alternates.length > 0) out.address_alternates = alternates;
   if (street) out.street = street;
   if (city) out.city = city;
