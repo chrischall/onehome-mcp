@@ -13,6 +13,7 @@ import {
   resolveByAddressOnce,
   type ByAddressInput,
   type ByAddressResult,
+  type FallbackPoolCache,
 } from './by-address.js';
 
 /**
@@ -117,6 +118,12 @@ export function registerResolveAddressesTools(
       const ctx = client.bridgeStatus().sessionContext;
       const groupId = input.group_id ?? ctx.groupId;
       const inputs = input.addresses as ByAddressInput[];
+      // Memoize the search-fallback pool across the whole batch: every row
+      // that misses suggestions and falls back resolves against the same
+      // `(groupId, savedSearchId)` pool, so fetch it once rather than once
+      // per address (perf P1). Shared even under concurrent fan-out — the
+      // cache stores the in-flight promise so racing rows await one fetch.
+      const poolCache: FallbackPoolCache = new Map();
       const rows = await mapWithConcurrency(
         inputs,
         BRIDGE_CONCURRENCY,
@@ -124,7 +131,7 @@ export function registerResolveAddressesTools(
           try {
             return toRow(
               await retryOnceOnTimeout(() =>
-                resolveByAddressOnce(client, a, groupId)
+                resolveByAddressOnce(client, a, groupId, poolCache)
               )
             );
           } catch (e) {

@@ -301,6 +301,81 @@ describe('onehome_resolve_addresses', () => {
     expect(result.rows?.[1]?.listing_id).toBe('FB');
   });
 
+  it('fetches the saved-search pool once for a multi-address same-pool batch', async () => {
+    // Perf (P1): a batch where every row misses suggestions and falls to
+    // the search-fallback rung must pull the identical saved-search pool
+    // ONCE, not once per address. Memoized on (groupId, savedSearchId).
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A', 'B', 'C'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '212',
+                StreetName: 'Ridgeway',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+            {
+              id: 'B',
+              property: {
+                StreetNumber: '231',
+                StreetName: 'Bluebird',
+                StreetSuffix: 'Rd',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+            {
+              id: 'C',
+              property: {
+                StreetNumber: '99',
+                StreetName: 'Highland',
+                StreetSuffix: 'Heights',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callResolve(transport, {
+      addresses: [
+        { address: '212 Ridgeway Rd', city: 'Lake Lure', state: 'NC' },
+        { address: '231 Bluebird Rd', city: 'Lake Lure', state: 'NC' },
+        { address: '99 Highland Heights', city: 'Lake Lure', state: 'NC' },
+      ],
+    });
+    expect(result.resolved).toBe(3);
+    expect(result.rows?.[0]?.listing_id).toBe('A');
+    expect(result.rows?.[1]?.listing_id).toBe('B');
+    expect(result.rows?.[2]?.listing_id).toBe('C');
+    // The expensive pool fetches happen exactly once for the whole batch.
+    const savedSearchCalls = transport.calls.filter(
+      (c) => c.operationName === 'GetSavedSearchBySearchId'
+    );
+    const savedListingsCalls = transport.calls.filter(
+      (c) => c.operationName === 'GetSavedListings'
+    );
+    expect(savedSearchCalls.length).toBe(1);
+    expect(savedListingsCalls.length).toBe(1);
+  });
+
   it('wraps bridge timeouts with the canonical "bridge timeout after retry" prefix and retries once', async () => {
     // Validates the @fetchproxy/server `retryOnceOnTimeout` +
     // `classifyRowError` wiring: bridge timeouts surface distinctly
