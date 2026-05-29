@@ -480,7 +480,7 @@ describe('formatListing', () => {
     });
   });
 
-  describe('address_alternates (issue #25)', () => {
+  describe('address_alternates (issue #25, degraded — issue #54)', () => {
     it('omits the field when upstream has no alternate address sources', () => {
       // Pin: until upstream exposes an MLS-specific alternate address feed,
       // the field is absent rather than emitted as an empty array.
@@ -488,7 +488,12 @@ describe('formatListing', () => {
       expect('address_alternates' in out).toBe(false);
     });
 
-    it('surfaces customProperty.UnparsedAddress when distinct from the primary built address', () => {
+    // Schema drift (issue #54): OneHome removed `customProperty.UnparsedAddress`
+    // — the SOLE candidate source for address_alternates. We no longer select
+    // it (the document would fail validation), so the feature degrades to
+    // "no alternates" rather than crashing. formatListing must produce a valid
+    // result with the field absent.
+    it('does not crash and omits address_alternates when UnparsedAddress is absent', () => {
       const raw: RawListingDetail = {
         id: 'X',
         property: {
@@ -499,17 +504,22 @@ describe('formatListing', () => {
           StateOrProvince: 'NC',
           PostalCode: '28746',
         },
+        // customProperty present but WITHOUT UnparsedAddress (post-schema-drift).
         customProperty: {
-          UnparsedAddress: '169 Overlook Point Ln, Lake Lure, NC 28746',
+          ListingKey: 'KEY-1',
+          FIPSCode: '37161',
         },
       };
       const out = formatListing('X', raw);
-      expect(out.address_alternates).toEqual([
-        '169 Overlook Point Ln, Lake Lure, NC 28746',
-      ]);
+      expect(out.address_full).toBe(
+        '109 Overlook Point Ln, Lake Lure, NC 28746'
+      );
+      expect('address_alternates' in out).toBe(false);
+      // The still-present customProperty fields keep flowing through.
+      expect(out.mls_listing_key).toBe('KEY-1');
     });
 
-    it('omits the field when the alternate equals the primary address (case-insensitive)', () => {
+    it('does not crash when customProperty is entirely absent', () => {
       const raw: RawListingDetail = {
         id: 'X',
         property: {
@@ -519,9 +529,6 @@ describe('formatListing', () => {
           City: 'Lake Lure',
           StateOrProvince: 'NC',
           PostalCode: '28746',
-        },
-        customProperty: {
-          UnparsedAddress: '109 Overlook Point Ln, Lake Lure, NC 28746',
         },
       };
       const out = formatListing('X', raw);
