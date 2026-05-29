@@ -40,11 +40,9 @@ export interface RawProperty {
   PostalCity?: string;
   StateOrProvince?: string;
   PostalCode?: string;
-  PostalCodePlus4?: string;
   NewConstructionYN?: boolean;
   ListPrice?: number;
   ListingId?: string;
-  CLIP?: string;
   LivingArea?: number;
   PropertyType?: string;
   PropertySubType?: string;
@@ -52,7 +50,6 @@ export interface RawProperty {
   BathroomsTotalInteger?: number;
   LivingAreaTotal?: number;
   BuildingAreaTotal?: number;
-  AvailabilityDate?: string;
   Latitude?: number;
   Longitude?: number;
   LotSizeArea?: number;
@@ -62,8 +59,6 @@ export interface RawProperty {
   MajorChangeType?: string;
   MajorChangeTimestamp?: string;
   PreviousListPrice?: number;
-  AboveGradeFinishedArea?: number;
-  AboveGradeFinishedAreaUnits?: string;
   YearBuilt?: number;
   AssociationFee?: number;
   AssociationFeeFrequency?: string;
