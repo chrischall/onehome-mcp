@@ -11,6 +11,7 @@ import {
   sqftToAcres,
   cleanTaxAnnual,
   collectAddressAlternates,
+  buildHyperlinkFormula,
 } from '@chrischall/realty-core';
 import { extractFeatures, loadCommunities, type ExtractedFeatures } from './features.js';
 
@@ -226,9 +227,15 @@ export function buildPropertyUrl(listingId: string): string {
  * Google-Sheets `HYPERLINK` formula pointing at the OneHome portal
  * URL for `listingId`. Pasting the returned string into a Sheets cell
  * renders as a clickable "OneHome" link. (Issue #24.)
+ *
+ * Delegates to the canonical realty-core `buildHyperlinkFormula`, which
+ * doubles embedded `"` in both the url and the label (`"` → `""`) — the
+ * onehome inline version did not, so a url with an embedded quote
+ * terminated the formula string literal early and produced a `#ERROR!`
+ * cell. (cohort consolidation, realty-mcp#1.)
  */
 export function buildPortalUrlHyperlink(listingId: string): string {
-  return `=HYPERLINK("${buildPropertyUrl(listingId)}","OneHome")`;
+  return buildHyperlinkFormula(buildPropertyUrl(listingId), 'OneHome');
 }
 
 /**
