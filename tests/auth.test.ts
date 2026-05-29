@@ -1,10 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
+  CheckTokenError,
+  CheckTokenTimeoutError,
+  exchangeEmailToken,
   extractTokenFromMagicLink,
   parseAuthInput,
   parseJwt,
   TokenExpiredError,
 } from '../src/auth.js';
+
+function jsonResponse(
+  body: unknown,
+  init: { status?: number } = {}
+): Response {
+  return new Response(JSON.stringify(body), {
+    status: init.status ?? 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
 
 function makeJwt(payload: Record<string, unknown>): string {
   const enc = (o: unknown): string =>
@@ -124,5 +137,59 @@ describe('TokenExpiredError', () => {
   it('mentions the onehome_set_auth tool as an in-session refresh path', () => {
     const err = new TokenExpiredError(Date.now() - 1000);
     expect(err.message).toContain('onehome_set_auth');
+  });
+});
+
+describe('exchangeEmailToken deadline + classification (issue #55)', () => {
+  it('fails fast with a timeout error when the transport never responds', async () => {
+    // A stale/invalid token can make upstream accept the connection but
+    // never send a response. Without a per-attempt deadline this wedges
+    // for the full MCP client timeout (~4 min). It must reject fast instead.
+    const fetchImpl = vi.fn(
+      () => new Promise<Response>(() => {}) // never resolves
+    ) as unknown as typeof fetch;
+
+    const started = Date.now();
+    await expect(
+      exchangeEmailToken('stale-email-token', fetchImpl, { deadlineMs: 20 })
+    ).rejects.toBeInstanceOf(CheckTokenTimeoutError);
+    // Well under the (test) deadline window + slack; nowhere near a hang.
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it('classifies the timeout distinctly from a token rejection', async () => {
+    const fetchImpl = vi.fn(
+      () => new Promise<Response>(() => {})
+    ) as unknown as typeof fetch;
+    const err = await exchangeEmailToken('t', fetchImpl, {
+      deadlineMs: 10,
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(CheckTokenTimeoutError);
+    expect(err).not.toBeInstanceOf(CheckTokenError);
+    expect((err as CheckTokenTimeoutError).deadlineMs).toBe(10);
+    expect((err as Error).message).toMatch(/timed out|timeout/i);
+  });
+
+  it('still classifies an HTTP 401 as a fast token-expired/invalid CheckTokenError', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response('unauthorized', { status: 401 })
+    ) as unknown as typeof fetch;
+    const err = await exchangeEmailToken('expired', fetchImpl, {
+      deadlineMs: 20,
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(CheckTokenError);
+    expect(err).not.toBeInstanceOf(CheckTokenTimeoutError);
+    expect((err as CheckTokenError).status).toBe(401);
+  });
+
+  it('resolves normally on a fast happy-path exchange', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ sessionToken: 'jwt-xyz', groupID: 'g1' })
+    ) as unknown as typeof fetch;
+    const res = await exchangeEmailToken('email-token', fetchImpl, {
+      deadlineMs: 5000,
+    });
+    expect(res.sessionToken).toBe('jwt-xyz');
+    expect(res.groupID).toBe('g1');
   });
 });

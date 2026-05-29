@@ -89,7 +89,11 @@ function addressTokens(s: string | undefined): string[] {
 
 function listingHaystack(raw: RawListingDetail): string {
   const p = raw.property ?? {};
-  const cp = raw.customProperty ?? {};
+  // Schema drift (issue #54): `customProperty.UnparsedAddress` was removed
+  // from OneHome's schema and is no longer queried. It was only ever one
+  // extra term in this fuzzy haystack; the structured street/city/state/zip
+  // fields below still carry the match signal, so dropping it just narrows
+  // the haystack rather than breaking resolution.
   return [
     p.StreetNumber,
     p.StreetDirPrefix,
@@ -101,7 +105,6 @@ function listingHaystack(raw: RawListingDetail): string {
     p.PostalCity,
     p.StateOrProvince,
     p.PostalCode,
-    cp.UnparsedAddress,
   ]
     .filter(Boolean)
     .join(' ')

@@ -77,6 +77,26 @@ describe('query builders', () => {
     expect(req.variables?.suppressEvent).toBe(true);
   });
 
+  // Schema drift (issue #54): OneHome removed `UnparsedAddress` from the
+  // `CustomProperty` type. Selecting it fails the whole document with
+  // FieldUndefined, breaking every listing fetch. Pin that neither query
+  // selects it, while the still-valid customProperty fields remain.
+  it('ListingById no longer selects the removed customProperty.UnparsedAddress field', () => {
+    const req = buildListingById({ listingId: 'L', groupId: 'G' });
+    expect(req.query).not.toContain('UnparsedAddress');
+    expect(req.query).toContain('customProperty {');
+    expect(req.query).toContain('ListingKey');
+    expect(req.query).toContain('FIPSCode');
+  });
+
+  it('GetListings (listingCard fragment) no longer selects UnparsedAddress', () => {
+    const req = buildGetListings({ groupId: 'g1' });
+    expect(req.query).not.toContain('UnparsedAddress');
+    expect(req.query).toContain('customProperty {');
+    expect(req.query).toContain('ListingKey');
+    expect(req.query).toContain('FIPSCode');
+  });
+
   it('MediaListingById queries the listingDetail media field', () => {
     const req = buildMediaListingById({ listingId: 'L', groupId: 'G' });
     expect(req.query).toContain('media {');

@@ -17,6 +17,8 @@
  * is just the parsing + JWT-introspection helpers.
  */
 
+import { withDeadline } from '@fetchproxy/server';
+
 export interface ParsedJwt {
   header: Record<string, unknown>;
   payload: Record<string, unknown>;
@@ -216,6 +218,48 @@ export class CheckTokenError extends Error {
 }
 
 /**
+ * Distinct from `CheckTokenError` (issue #55): the checkToken *exchange
+ * itself* did not complete within the per-attempt deadline. A stale or
+ * invalid magic-link token can make upstream accept the connection but
+ * never (or very slowly) respond; without a deadline the `await fetch`
+ * wedges for the full MCP client timeout (~4 min) and the user sees a
+ * multi-minute hang instead of an actionable error.
+ *
+ * This is a *transport timeout*, classified separately from a token
+ * rejection (HTTP 4xx → `CheckTokenError`) so callers and tests can tell
+ * "the network/upstream stalled" apart from "the token is bad".
+ */
+export class CheckTokenTimeoutError extends Error {
+  readonly deadlineMs: number;
+  constructor(deadlineMs: number) {
+    super(
+      `OneHome /api/authentication/checkToken timed out after ${deadlineMs}ms. ` +
+        `The token exchange did not complete in time — this is usually a stale ` +
+        `magic-link token (upstream accepts the connection but never responds) ` +
+        `or a transient network/upstream stall. Try a fresh magic-link URL via ` +
+        `the \`onehome_set_auth\` tool, or retry if connectivity was the issue. ` +
+        `(Failing fast here instead of hanging for the full client timeout.)`
+    );
+    this.name = 'CheckTokenTimeoutError';
+    this.deadlineMs = deadlineMs;
+  }
+}
+
+/**
+ * Default per-attempt deadline for the checkToken exchange. Set well below
+ * the MCP SDK request deadline (60s default tool timeout / multi-minute
+ * client timeout) so a wedged exchange fails fast with
+ * `CheckTokenTimeoutError` rather than hanging the whole `onehome_set_auth`
+ * call. (Issue #55.)
+ */
+export const CHECK_TOKEN_DEADLINE_MS = 20_000;
+
+export interface ExchangeEmailTokenOptions {
+  /** Per-attempt deadline in ms. Defaults to `CHECK_TOKEN_DEADLINE_MS`. */
+  deadlineMs?: number;
+}
+
+/**
  * Exchange an email-token (the `?token=` value from a OneHome magic
  * link) for a session-token bearer + session context (groupID,
  * savedSearchID, agentID, …) by POSTing to
@@ -230,33 +274,49 @@ export class CheckTokenError extends Error {
  */
 export async function exchangeEmailToken(
   emailToken: string,
-  fetchImpl: typeof fetch = globalThis.fetch
+  fetchImpl: typeof fetch = globalThis.fetch,
+  options: ExchangeEmailTokenOptions = {}
 ): Promise<CheckTokenResponse> {
-  const response = await fetchImpl(CHECK_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Origin: ORIGIN,
-      Referer: `${ORIGIN}/`,
-      'User-Agent': USER_AGENT,
-    },
-    body: JSON.stringify({ emailToken }),
-  });
-  const text = await response.text();
-  if (response.status < 200 || response.status >= 300) {
-    throw new CheckTokenError(response.status, text);
+  const deadlineMs = options.deadlineMs ?? CHECK_TOKEN_DEADLINE_MS;
+  // Race the whole network round-trip (fetch + body read) against a
+  // per-attempt deadline (issue #55). A stale token can make upstream
+  // accept the connection but never respond; without this the await would
+  // hang for the full MCP client timeout (~4 min). On deadline expiry we
+  // throw `CheckTokenTimeoutError` — a transport timeout, classified
+  // distinctly from a token rejection (HTTP 4xx → `CheckTokenError`).
+  const roundTrip = (async (): Promise<{ status: number; text: string }> => {
+    const response = await fetchImpl(CHECK_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Origin: ORIGIN,
+        Referer: `${ORIGIN}/`,
+        'User-Agent': USER_AGENT,
+      },
+      body: JSON.stringify({ emailToken }),
+    });
+    return { status: response.status, text: await response.text() };
+  })();
+
+  const outcome = await withDeadline(roundTrip, deadlineMs);
+  if (outcome.timedOut) {
+    throw new CheckTokenTimeoutError(deadlineMs);
+  }
+  const { status, text } = outcome.value;
+  if (status < 200 || status >= 300) {
+    throw new CheckTokenError(status, text);
   }
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new CheckTokenError(response.status, `non-JSON: ${text}`);
+    throw new CheckTokenError(status, `non-JSON: ${text}`);
   }
   const sessionToken = parsed.sessionToken;
   if (typeof sessionToken !== 'string' || sessionToken.length === 0) {
     throw new CheckTokenError(
-      response.status,
+      status,
       'response missing sessionToken: ' + text.slice(0, 200)
     );
   }
