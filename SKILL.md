@@ -31,11 +31,11 @@ Run `onehome_healthcheck` first to confirm auth is wired up — it returns the m
 ## Workflow
 
 1. **Pick a group.** `onehome_get_groups` → the curated buckets the agent shared with the buyer. Most tools take a `group_id`.
-2. **Search inside the group.** `onehome_search_properties { group_id, [saved_search_id] }`. Pass a `saved_search_id` from `onehome_get_saved_searches` to apply a saved filter; leave it off for the group default.
+2. **Search inside the group.** `onehome_search_properties { group_id, [saved_search_id] }`. Pass a `saved_search_id` from `onehome_get_saved_search` to apply a saved filter; leave it off for the group default. `onehome_get_saved_search_with_listings` returns the saved search and its inflated listings in one call.
 3. **Inflate a listing.** `onehome_get_property { group_id, listing_id }` for the full record. The listing id is an OSK like `EYxOzZSAbCdEf12345`; you can pass a portal URL instead and the MCP will extract it.
 4. **Photos / schools / walkability** are separate calls. Use the lat/lng from `onehome_get_property` to drive `onehome_get_schools` and `onehome_get_walk_score`.
 5. **Compare** `onehome_compare_properties { group_id, targets: [...] }` — 2 to 8 listings, concurrent fetch, per-row error capture. Don't fan out manual `get_property` calls when comparing.
-6. **Escape hatch.** `onehome_graphql` lets you send a raw document with variables when you need a field the structured tools don't expose. Common operation names: `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`, `GetLocalLogicSchools`.
+6. **Escape hatch.** `onehome_graphql` lets you send a raw document with variables when you need a field the structured tools don't expose. Common operation names: `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools / walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score` instead.)
 
 ## Free-text search
 

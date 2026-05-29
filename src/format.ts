@@ -14,6 +14,7 @@ import {
   buildHyperlinkFormula,
 } from '@chrischall/realty-core';
 import { extractFeatures, loadCommunities, type ExtractedFeatures } from './features.js';
+import { joinNonEmpty, streetFromProperty } from './address-format.js';
 
 export { hoaToMonthlyUsd, daysSince } from '@chrischall/realty-core';
 
@@ -193,11 +194,6 @@ export interface FormattedListing {
 
 const URL_BASE = 'https://portal.onehome.com/en-US/properties';
 
-function joinNonEmpty(parts: Array<string | undefined>, sep = ' '): string | undefined {
-  const cleaned = parts.map((p) => (p ?? '').trim()).filter((p) => p.length > 0);
-  return cleaned.length > 0 ? cleaned.join(sep) : undefined;
-}
-
 export function pickPrimaryPhoto(media: RawMediaItem[] | undefined): {
   primary_photo_url?: string;
   primary_thumbnail_url?: string;
@@ -297,14 +293,7 @@ export function formatListing(
 ): FormattedListing {
   const p = raw.property ?? {};
   const cp = raw.customProperty ?? {};
-  const street = joinNonEmpty([
-    p.StreetNumber,
-    p.StreetDirPrefix,
-    p.StreetName,
-    p.StreetSuffix,
-    p.StreetDirSuffix,
-    p.UnitNumber ? `#${p.UnitNumber}` : undefined,
-  ]);
+  const street = streetFromProperty(p);
   const city = p.City ?? p.PostalCity;
   const stateZip = joinNonEmpty([p.StateOrProvince, p.PostalCode]);
   const addressFull = joinNonEmpty(
