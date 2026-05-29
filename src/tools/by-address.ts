@@ -89,11 +89,7 @@ function addressTokens(s: string | undefined): string[] {
 
 function listingHaystack(raw: RawListingDetail): string {
   const p = raw.property ?? {};
-  // `UnparsedAddress` lives at the listingDetail level (a SIBLING of
-  // customProperty), not inside customProperty (issue #25; restored after
-  // PR #56). It carries an extra MLS-feed parsing of the address, so it
-  // widens the fuzzy haystack alongside the structured street/city/state/
-  // zip fields.
+  // UnparsedAddress (listingDetail-level, #25) widens the fuzzy haystack.
   return [
     p.StreetNumber,
     p.StreetDirPrefix,

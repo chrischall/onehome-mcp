@@ -106,15 +106,7 @@ export interface RawListingDetail {
   createdAt?: string;
   hideWhenUnauth?: boolean;
   property?: RawProperty;
-  /**
-   * MLS-feed-supplied flat address string. Lives on the parent listing
-   * type (`listingDetail` level), a SIBLING of `customProperty` — NOT
-   * inside `customProperty` (issue #25; restores the placement PR #56
-   * had mistaken for a removal). Sometimes differs from the primary
-   * address we build from StreetNumber/StreetName/etc. (e.g. different
-   * MLS feeds for the same listing carry different parsings). Surface as
-   * `address_alternates` when it disagrees with the primary.
-   */
+  // MLS-feed flat address; listingDetail-level sibling of customProperty (#25).
   UnparsedAddress?: string;
   media?: RawMediaItem[];
   customProperty?: RawCustomProperty;
@@ -324,15 +316,7 @@ export function formatListing(
     portal_url_hyperlink: buildPortalUrlHyperlink(listingId),
   };
   if (addressFull) out.address_full = addressFull;
-  // address_alternates: pick up any flat MLS-feed address that disagrees
-  // with the primary we built from StreetNumber/StreetName/etc.
-  // (Issue #25 — `listingDetail.UnparsedAddress`, a SIBLING of
-  // customProperty at the listing level, NOT inside customProperty; PR #56
-  // had mistaken its mis-nesting for a removal and degraded this to empty.)
-  // onehome is the thin gather-then-call wrapper over the canonical
-  // realty-core helper: it supplies the portal's candidate list (just
-  // UnparsedAddress here), the canonical handles the normalize/dedup-
-  // against-primary. Omitted entirely when nothing alternate is present.
+  // address_alternates: flat MLS-feed address (#25) deduped against the primary.
   const alternates = collectAddressAlternates(addressFull, [raw.UnparsedAddress]);
   if (alternates.length > 0) out.address_alternates = alternates;
   if (street) out.street = street;

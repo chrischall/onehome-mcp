@@ -528,7 +528,8 @@ describe('formatListing', () => {
           StateOrProvince: 'NC',
           PostalCode: '28746',
         },
-        UnparsedAddress: '109 Overlook Point Ln, Lake Lure, NC 28746',
+        // Same as the primary but for street-portion CASE — still deduped.
+        UnparsedAddress: '109 OVERLOOK POINT LN, Lake Lure, NC 28746',
       };
       const out = formatListing('X', raw);
       expect('address_alternates' in out).toBe(false);
