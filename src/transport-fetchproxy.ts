@@ -178,13 +178,18 @@ export class FetchproxyTransport implements OneHomeTransport {
     };
   }
 
-  async graphql<T = unknown>(req: GraphQLRequest): Promise<GraphQLResponse<T>> {
+  /**
+   * Ensure a *non-expired* captured token is in hand before an outbound
+   * call. If the captured token expired mid-session, drop it and
+   * recapture; if the recapture still yields an expired token, raise
+   * `TokenExpiredError`. Shared by graphql() and rest() so both paths
+   * never fire a request with a known-dead bearer.
+   */
+  private async ensureFreshToken(): Promise<void> {
     await this.ensureToken();
     if (this.tokenExpiresAt !== null && this.tokenExpiresAt < Date.now()) {
       // Captured token expired mid-session — drop it and recapture.
-      this.token = null;
-      this.tokenExpiresAt = null;
-      this.capturePromise = null;
+      this.dropToken();
       try {
         await this.ensureToken();
       } catch (err) {
@@ -194,6 +199,17 @@ export class FetchproxyTransport implements OneHomeTransport {
         throw err;
       }
     }
+  }
+
+  /** Discard the captured token so the next ensureToken() recaptures. */
+  private dropToken(): void {
+    this.token = null;
+    this.tokenExpiresAt = null;
+    this.capturePromise = null;
+  }
+
+  async graphql<T = unknown>(req: GraphQLRequest): Promise<GraphQLResponse<T>> {
+    await this.ensureFreshToken();
     const body = JSON.stringify({
       operationName: req.operationName,
       query: req.query,
@@ -221,9 +237,7 @@ export class FetchproxyTransport implements OneHomeTransport {
     const text = await response.text();
     if (response.status === 401 || response.status === 403) {
       // Captured token has been revoked — discard and try once more.
-      this.token = null;
-      this.tokenExpiresAt = null;
-      this.capturePromise = null;
+      this.dropToken();
       this.recordFailure(`HTTP ${response.status}`);
       throw new Error(
         `OneHome GraphQL rejected the captured token (HTTP ${response.status}). ` +
@@ -254,30 +268,56 @@ export class FetchproxyTransport implements OneHomeTransport {
   }
 
   async rest<T = unknown>(path: string): Promise<RestResponse<T>> {
-    await this.ensureToken();
     const normalized = path.startsWith('/') ? path : `/${path}`;
     const url = `${REST_BASE}${normalized}`;
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${this.token}`,
-          Origin: ORIGIN,
-          Referer: `${ORIGIN}/`,
-          'User-Agent': USER_AGENT,
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.recordFailure(`rest network error: ${msg}`);
-      throw new Error(`onehome-mcp REST fetch failed: ${msg}`);
+    // 401/403 means the captured bearer was revoked. Mirror graphql()'s
+    // recapture intent on this path too: drop the dead token, recapture,
+    // and retry the request once so a stale capture self-heals. A
+    // *persistent* 401/403 (e.g. the agent-only LocalLogic schools
+    // dataset, which a fresh token still can't reach) falls through and
+    // the non-ok response is returned — the schools tool surfaces that
+    // cleanly rather than throwing. The token-expiry-drop in
+    // ensureFreshToken() runs before each attempt so we never fire with a
+    // known-dead bearer.
+    let status = 0;
+    let responseUrl = url;
+    let text = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this.ensureFreshToken();
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${this.token}`,
+            Origin: ORIGIN,
+            Referer: `${ORIGIN}/`,
+            'User-Agent': USER_AGENT,
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.recordFailure(`rest network error: ${msg}`);
+        throw new Error(`onehome-mcp REST fetch failed: ${msg}`);
+      }
+      // Read the body exactly once per response.
+      text = await response.text();
+      status = response.status;
+      responseUrl = response.url || url;
+      if ((status === 401 || status === 403) && attempt === 0) {
+        // Revoked-token surface — drop it and retry once with a fresh
+        // capture. A persistent 401/403 (agent-only dataset) survives the
+        // retry and falls through to the non-ok response below.
+        this.dropToken();
+        this.recordFailure(`REST HTTP ${status}`);
+        continue;
+      }
+      break;
     }
-    const text = await response.text();
-    const isOk = response.status >= 200 && response.status < 300;
+    const isOk = status >= 200 && status < 300;
     if (isOk) this.recordSuccess();
-    else this.recordFailure(`REST HTTP ${response.status}`);
+    else this.recordFailure(`REST HTTP ${status}`);
     let data: T | string = text;
     if (isOk) {
       try {
@@ -287,8 +327,8 @@ export class FetchproxyTransport implements OneHomeTransport {
       }
     }
     return {
-      status: response.status,
-      url: response.url || url,
+      status,
+      url: responseUrl,
       data,
       ok: isOk && typeof data !== 'string',
     };

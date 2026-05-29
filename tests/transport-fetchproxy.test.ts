@@ -182,3 +182,99 @@ describe('FetchproxyTransport — successful capture', () => {
     expect(headers.Authorization).toBe('Bearer eyJ.mock.token');
   });
 });
+
+// A JWT whose `exp` claim is already in the past — used to drive the
+// token-expiry-drop branch. The transport reads `exp` (seconds) via
+// parseJwt and compares `exp*1000 < Date.now()`.
+function expiredJwt(): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString(
+    'base64url',
+  );
+  const payload = Buffer.from(
+    JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 60 }),
+  ).toString('base64url');
+  return `${header}.${payload}.sig`;
+}
+
+describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())', () => {
+  it('drops an expired captured token and recaptures before the REST fetch', async () => {
+    // First capture yields an already-expired JWT; the rest() path must
+    // notice and recapture (matching graphql()'s expiry-drop branch)
+    // rather than firing a doomed request with a dead bearer.
+    let captures = 0;
+    captureBehavior = async () => {
+      captures += 1;
+      return captures === 1 ? expiredJwt() : 'Bearer fresh.token';
+    };
+    const stubFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
+    const t = new FetchproxyTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    await t.rest('/locallogic/scores?lat=1&lng=2');
+    expect(captures).toBe(2); // initial expired capture + one recapture
+    const headers = (stubFetch.mock.calls[0][1] as RequestInit).headers as Record<
+      string,
+      string
+    >;
+    expect(headers.Authorization).toBe('Bearer fresh.token');
+  });
+
+  it('recaptures and retries once when the first REST call returns 401', async () => {
+    // A 401 means the captured bearer was revoked. Mirror graphql()'s
+    // recapture intent: drop the dead token, recapture, and retry the
+    // request once — so a stale capture self-heals instead of leaking a
+    // hard failure to the caller.
+    captureBehavior = async () => 'Bearer stale.token';
+    const stubFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+      );
+    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
+    const t = new FetchproxyTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    captureBehavior = (() => {
+      let n = 0;
+      return async () => (++n === 1 ? 'Bearer stale.token' : 'Bearer fresh.token');
+    })();
+    const res = await t.rest('/locallogic/schools?lat=1&lng=2');
+    expect(stubFetch).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe(200);
+    expect(res.ok).toBe(true);
+    const retryHeaders = (stubFetch.mock.calls[1][1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(retryHeaders.Authorization).toBe('Bearer fresh.token');
+  });
+
+  it('surfaces a persistent 403 as { ok:false } after one recapture+retry (schools policy denial)', async () => {
+    // The LocalLogic schools endpoint is agent-only on consumer-share
+    // sessions and returns a *policy* 403 that recapturing can't fix. The
+    // transport must still recover gracefully: recapture+retry once, then
+    // hand the non-ok response back so the schools tool can surface its
+    // friendly "agent-only dataset" message rather than throwing.
+    captureBehavior = async () => 'Bearer good.token';
+    // Fresh Response per call — real fetch never reuses a body.
+    const stubFetch = vi
+      .fn()
+      .mockImplementation(async () => new Response('Forbidden', { status: 403 }));
+    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
+    const t = new FetchproxyTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    const res = await t.rest('/locallogic/schools?lat=1&lng=2');
+    expect(stubFetch).toHaveBeenCalledTimes(2); // initial + one retry
+    expect(res.status).toBe(403);
+    expect(res.ok).toBe(false);
+  });
+});

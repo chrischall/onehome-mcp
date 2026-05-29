@@ -211,6 +211,69 @@ describe('search tool — groups + saved searches', () => {
     ]);
   });
 
+  // The ctx.savedSearchId is scoped to ctx.groupId. When the caller asks
+  // for a DIFFERENT group, falling back to that saved search would inflate
+  // listings from the wrong group. Only fall back when the requested group
+  // is the one the saved search belongs to.
+  it('does NOT fall back to ctx.savedSearchId when the explicit group_id is a different group', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      // Saved search ss-ctx belongs to g-ctx, NOT to the requested group.
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-ctx' },
+    });
+    transport.on('GetListings', (vars) => {
+      expect(vars.groupId).toBe('g-other');
+      return ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } });
+    });
+    const client = new OneHomeClient({ transport });
+    harness = await createTestHarness((server) =>
+      registerSearchTools(server, client)
+    );
+    const result = await harness.callTool('onehome_search_properties', {
+      group_id: 'g-other',
+    });
+    // Must surface the clear error rather than inflating the wrong group's
+    // saved search.
+    expect(result.isError).toBe(true);
+    const first = result.content[0]!;
+    if (first.type !== 'text') throw new Error('expected text');
+    expect(first.text).toMatch(/saved_search_id/);
+    // The cross-group saved search must NOT have been fetched.
+    const ops = transport.calls.map((c) => c.operationName);
+    expect(ops).toEqual(['GetListings']);
+    expect(ops).not.toContain('GetSavedSearchBySearchId');
+    expect(ops).not.toContain('GetSavedListings');
+  });
+
+  it('does fall back to ctx.savedSearchId when the explicit group_id matches ctx.groupId', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-ctx' },
+    });
+    transport.on('GetListings', () =>
+      ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } })
+    );
+    transport.on('GetSavedSearchBySearchId', (vars) => {
+      expect(vars.searchId).toBe('ss-ctx');
+      return ok({ savedSearch: { id: 'ss-ctx', listingIds: ['X'] } });
+    });
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          pageInfo: { totalElements: 1 },
+          listings: [sampleListing('X', 100000)],
+        },
+      })
+    );
+    const result = await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-ctx',
+    });
+    expect(result.count).toBe(1);
+    expect(result.saved_search_id).toBe('ss-ctx');
+  });
+
   it('does NOT fall back when the raw listings call returns non-zero results', async () => {
     const transport = new FakeTransport();
     transport.setStatus({

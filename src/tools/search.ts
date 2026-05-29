@@ -205,7 +205,12 @@ export function registerSearchTools(
         // (almost certainly what the caller wanted). Otherwise surface a
         // clear error so the caller knows they hit the access-restricted
         // shape rather than a genuinely empty group.
-        if (ctx.savedSearchId) {
+        //
+        // The bootstrapped savedSearchId is scoped to `ctx.groupId`. Only
+        // fall back to it when the requested group IS that group —
+        // otherwise we'd inflate listings from a different group's saved
+        // search than the one the caller asked for.
+        if (ctx.savedSearchId && ctx.groupId === groupId) {
           return runSavedSearchPath(ctx.savedSearchId);
         }
         throw new Error(

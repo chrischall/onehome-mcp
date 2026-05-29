@@ -94,6 +94,9 @@ fragment listingCard on ListingDetail {
       Medium {
         ...imageDetails
       }
+      Large {
+        ...imageDetails
+      }
     }
   }
   UnparsedAddress
