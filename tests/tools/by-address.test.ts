@@ -585,6 +585,91 @@ describe('onehome_get_by_address — search-fallback rung', () => {
     expect(result.error).toBe('no listing found');
   });
 
+  // Substring → addressMatch correctness: the old matcher dropped the
+  // short numeric token "26" (< 3 chars) and then substring-matched the
+  // remaining "bear" inside the haystack — so "26 Bear Ln" wrongly
+  // resolved to a pool listing at "126 Bear Ln". The canonical
+  // realty-core addressMatch keeps the leading numeric token and anchors
+  // on it as a whole token, so "26" no longer matches inside "126".
+  it('does NOT match "26 Bear Ln" against a pool listing at "126 Bear Ln"', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '126',
+                StreetName: 'Bear',
+                StreetSuffix: 'Ln',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '26 Bear Ln',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.error).toBe('no listing found');
+  });
+
+  it('still matches "126 Bear Ln" against the same pool listing', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '126',
+                StreetName: 'Bear',
+                StreetSuffix: 'Ln',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '126 Bear Ln',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('A');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+
   it('flags matched_outside_saved_area when fallback hit lacks the input city', async () => {
     const transport = new FakeTransport();
     transport.setStatus({

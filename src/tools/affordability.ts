@@ -8,12 +8,9 @@ import { textResult } from '../mcp.js';
  * the standard 28/36 DTI rule. The math is hoisted to the canonical
  * `calculateAffordability` in `@chrischall/realty-core` (shared with
  * zillow-mcp / redfin-mcp / compass-mcp / homes-mcp); the canonical
- * output shape is byte-identical to onehome's previous inline result,
- * so this is a straight re-export under onehome's local name. No
- * network — pure local math.
+ * output shape is byte-identical to onehome's previous inline result.
+ * No network — pure local math.
  */
-export { calculateAffordability as computeAffordability } from '@chrischall/realty-core';
-
 export function registerAffordabilityTools(server: McpServer): void {
   server.registerTool(
     'onehome_calculate_affordability',

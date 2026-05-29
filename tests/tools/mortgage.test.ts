@@ -1,15 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { computeAffordability } from '../../src/tools/affordability.js';
+import { calculateAffordability } from '@chrischall/realty-core';
 
-// We import computeAffordability from affordability and exercise it
-// directly. The mortgage tool itself is a thin wrapper around the
-// same PI math, validated through the affordability cross-check
-// (a price the affordability solver returns produces a PITI exactly
-// equal to the binding constraint).
+// The affordability tool is a straight re-export of realty-core's
+// `calculateAffordability`, so we exercise the canonical helper directly
+// here. The mortgage tool itself is a thin wrapper around the same PI
+// math, validated through the affordability cross-check (a price the
+// affordability solver returns produces a PITI exactly equal to the
+// binding constraint).
 
 describe('mortgage / affordability math', () => {
   it('affordability solver respects the front-end DTI constraint', () => {
-    const out = computeAffordability({
+    const out = calculateAffordability({
       monthly_income: 12000,
       down_payment: 100000,
       interest_rate: 6.5,
@@ -25,7 +26,7 @@ describe('mortgage / affordability math', () => {
   });
 
   it('back-end DTI binds when debts are heavy', () => {
-    const out = computeAffordability({
+    const out = calculateAffordability({
       monthly_income: 10000,
       monthly_debts: 2500,
       down_payment: 50000,
@@ -37,7 +38,7 @@ describe('mortgage / affordability math', () => {
   });
 
   it('handles zero interest as a fixed-amortization edge case', () => {
-    const out = computeAffordability({
+    const out = calculateAffordability({
       monthly_income: 10000,
       down_payment: 50000,
       interest_rate: 0,

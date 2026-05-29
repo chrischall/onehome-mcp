@@ -24,7 +24,7 @@ export function registerGraphqlTool(
     {
       title: 'Send a raw GraphQL document to services.onehome.com',
       description:
-        "Power-user escape hatch — send a raw GraphQL document with variables. Returns the full `{ data, errors, status, url }` envelope so you can read upstream schema errors directly. Operation names live in the portal bundle; common ones include `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`, `GetLocalLogicSchools`. Pass `query` (the full document body), an `operation_name` matching the document, and any `variables` as JSON.",
+        "Power-user escape hatch — send a raw GraphQL document with variables. Returns the full `{ data, errors, status, url }` envelope so you can read upstream schema errors directly. Operation names live in the portal bundle; common ones include `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools/walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score`.) Pass `query` (the full document body), an `operation_name` matching the document, and any `variables` as JSON.",
       annotations: {
         title: 'Send a raw GraphQL document to services.onehome.com',
         readOnlyHint: true,

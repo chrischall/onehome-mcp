@@ -22,13 +22,16 @@ So instead of routing every fetch through your signed-in browser tab (like the o
 
 | Tool | What it does |
 | --- | --- |
-| `onehome_get_user` | Smallest auth probe — returns your OneHome profile (name, email, locale). |
+| `onehome_get_user` | Smallest auth probe — returns your OneHome profile (name, email) and the groups your agent shared. |
 | `onehome_get_groups` | List the OneHome "groups" your agent has shared with you (each one a market / curated listing bucket). |
-| `onehome_get_group_details` | Inspect a single group by id. |
-| `onehome_get_saved_searches` | List a group's saved-search definitions. `searchCriteria` is JSON-parsed when possible. |
+| `onehome_get_saved_search` | Fetch an agent-curated saved search by id — name, filter criteria, polygon, and the OSK listing ids that compose the share. |
+| `onehome_get_saved_search_with_listings` | The "show me my saved homes" flow in one round trip — saved search plus its inflated listings. |
 | `onehome_search_properties` | Listings within a group; optionally scoped to a saved search. |
 | `onehome_search_suggestions` | Free-text suggestion search (address, MLS #) across all feeds. |
+| `onehome_get_by_address` | Resolve a single free-text street address to a listing's portal URL + id. |
+| `onehome_resolve_addresses` | Bulk-resolve up to 100 structured addresses to portal URLs + listing ids; concurrent, per-row error capture. |
 | `onehome_get_property` | Full property record by listing id or portal URL. |
+| `onehome_bulk_get` | Fetch up to N listings in one call — one structured row per id, per-row error capture. |
 | `onehome_get_property_photos` | Full media gallery — Thumbnail / Medium / Large variants + room descriptions. |
 | `onehome_compare_properties` | 2-8 listings side-by-side. Per-row error capture; calls are concurrent. |
 | `onehome_get_schools` | Local-Logic primary + high schools near a lat/lng. |
@@ -36,6 +39,9 @@ So instead of routing every fetch through your signed-in browser tab (like the o
 | `onehome_graphql` | Power-user escape hatch — send a raw GraphQL document with variables. |
 | `onehome_calculate_mortgage` | Local PITI calculator. Same math as the other realty MCPs. |
 | `onehome_calculate_affordability` | Local 28/36 DTI solver — max home price you can afford. |
+| `onehome_set_auth` | Add another authenticated session at runtime (magic link / JWT / email-token) for buyers holding shares across multiple agents. |
+| `onehome_set_active_session` | Force a specific registered session to be the active one (overrides MLS-suffix routing). |
+| `onehome_get_session_context` | List every registered session — auth mode, token expiry, and the group / saved-search / agent scope each bootstrapped. |
 | `onehome_healthcheck` | End-to-end auth + GraphQL smoke check with token-expiry diagnostics. |
 
 ## Install

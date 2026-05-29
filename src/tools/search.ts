@@ -9,47 +9,19 @@ import {
   buildListingSuggestionsSearch,
 } from '../queries.js';
 import { buildPropertyUrl, formatListing, type RawListingDetail } from '../format.js';
+import {
+  joinNonEmpty,
+  streetFromSuggestion,
+  type SuggestionEntry,
+} from '../address-format.js';
 
 interface ListingsResponse {
   listings?: { pageInfo?: unknown; listings?: RawListingDetail[] };
   listingsBySavedSearchId?: { pageInfo?: unknown; listings?: RawListingDetail[] };
 }
 
-interface SuggestionEntry {
-  id?: string;
-  listingId?: string;
-  postalCode?: string;
-  city?: string;
-  postalCity?: string;
-  stateOrProvince?: string;
-  streetName?: string;
-  streetNumber?: string;
-  streetAdditionalInfo?: string;
-  unitNumber?: string;
-  streetSuffix?: string;
-  streetDirPrefix?: string;
-  streetDirSuffix?: string;
-  bedroomsTotal?: number;
-  bathroomsTotalInteger?: number;
-  listPrice?: number;
-  media?: {
-    Image?: { Thumbnail?: { mediaUrl?: string; width?: number; height?: number } };
-  }[];
-}
-
-function joinNonEmpty(parts: Array<string | undefined>, sep = ' '): string {
-  return parts.map((p) => (p ?? '').trim()).filter((p) => p.length > 0).join(sep);
-}
-
 function formatSuggestion(s: SuggestionEntry): Record<string, unknown> {
-  const street = joinNonEmpty([
-    s.streetNumber,
-    s.streetDirPrefix,
-    s.streetName,
-    s.streetSuffix,
-    s.streetDirSuffix,
-    s.unitNumber ? `#${s.unitNumber}` : undefined,
-  ]);
+  const street = streetFromSuggestion(s);
   const cityState = joinNonEmpty([s.city ?? s.postalCity, s.stateOrProvince], ', ');
   const addr = joinNonEmpty([street, cityState, s.postalCode], ', ');
   const photo = s.media?.[0]?.Image?.Thumbnail?.mediaUrl;
@@ -58,8 +30,8 @@ function formatSuggestion(s: SuggestionEntry): Record<string, unknown> {
     listing_id: listingId,
     source_listing_id: s.listingId,
     url: listingId ? buildPropertyUrl(listingId) : undefined,
-    address_full: addr || undefined,
-    street: street || undefined,
+    address_full: addr,
+    street: street,
     city: s.city ?? s.postalCity,
     state: s.stateOrProvince,
     zip: s.postalCode,
@@ -205,7 +177,12 @@ export function registerSearchTools(
         // (almost certainly what the caller wanted). Otherwise surface a
         // clear error so the caller knows they hit the access-restricted
         // shape rather than a genuinely empty group.
-        if (ctx.savedSearchId) {
+        //
+        // The bootstrapped savedSearchId is scoped to `ctx.groupId`. Only
+        // fall back to it when the requested group IS that group —
+        // otherwise we'd inflate listings from a different group's saved
+        // search than the one the caller asked for.
+        if (ctx.savedSearchId && ctx.groupId === groupId) {
           return runSavedSearchPath(ctx.savedSearchId);
         }
         throw new Error(

@@ -94,6 +94,9 @@ fragment listingCard on ListingDetail {
       Medium {
         ...imageDetails
       }
+      Large {
+        ...imageDetails
+      }
     }
   }
   UnparsedAddress
@@ -362,11 +365,9 @@ query ListingById($listingId: String!, $groupId: String!, $savedSearchId: String
       PostalCity
       StateOrProvince
       PostalCode
-      PostalCodePlus4
       NewConstructionYN
       ListPrice
       ListingId
-      CLIP
       LivingArea
       PropertyType
       PropertySubType
@@ -374,7 +375,6 @@ query ListingById($listingId: String!, $groupId: String!, $savedSearchId: String
       BathroomsTotalInteger
       LivingAreaTotal
       BuildingAreaTotal
-      AvailabilityDate
       Latitude
       Longitude
       LotSizeArea
@@ -384,12 +384,6 @@ query ListingById($listingId: String!, $groupId: String!, $savedSearchId: String
       MajorChangeTimestamp
       PreviousListPrice
       StandardStatus
-      AboveGradeFinishedArea
-      AboveGradeFinishedAreaUnits
-      WaterSource
-      Sewer
-      Utilities
-      CommonInterest
       YearBuilt
       AssociationFee
       AssociationFeeFrequency

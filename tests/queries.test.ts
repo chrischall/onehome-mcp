@@ -117,4 +117,16 @@ describe('query builders', () => {
     expect(req.query).toContain('media {');
     expect(req.query).toContain('Image {');
   });
+
+  it('listingCard fragment selects all three Image variants (Thumbnail/Medium/Large)', () => {
+    // pickPrimaryPhoto prefers Image.Large.mediaUrl — but the card
+    // fragment only selected Thumbnail + Medium, so that read was dead on
+    // every search/listing-card path. Select Large too so the primary
+    // photo is the full-res CDN URL when present.
+    const req = buildGetListings({ groupId: 'g1' });
+    const mediaBlock = req.query.slice(req.query.indexOf('media {'));
+    expect(mediaBlock).toContain('Thumbnail {');
+    expect(mediaBlock).toContain('Medium {');
+    expect(mediaBlock).toContain('Large {');
+  });
 });
