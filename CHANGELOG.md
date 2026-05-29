@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/chrischall/onehome-mcp/compare/v0.11.0...v0.12.0) (2026-05-29)
+
+
+### Features
+
+* adopt @fetchproxy/server 0.11.0 + @chrischall/realty-core 0.4.1 ([#62](https://github.com/chrischall/onehome-mcp/issues/62)) ([9860799](https://github.com/chrischall/onehome-mcp/commit/9860799f245d6fa1540640795a427803cc37582b))
+
+
+### Bug Fixes
+
+* **ci:** arm auto-merge from verdict comment when structured_output is empty ([#60](https://github.com/chrischall/onehome-mcp/issues/60)) ([5dda0d3](https://github.com/chrischall/onehome-mcp/commit/5dda0d3ad2354e4d77ff1f2046b938c3172e7dfc))
+* **ci:** treat instant-merge race as success in auto-merge arm ([#58](https://github.com/chrischall/onehome-mcp/issues/58)) ([5ea13f0](https://github.com/chrischall/onehome-mcp/commit/5ea13f0da917c21157bf3d4466f2faaab84348fa))
+* restore address_alternates by fixing UnparsedAddress placement ([#25](https://github.com/chrischall/onehome-mcp/issues/25)) ([#59](https://github.com/chrischall/onehome-mcp/issues/59)) ([ea8e0a3](https://github.com/chrischall/onehome-mcp/commit/ea8e0a3355891c3c2bcd6aa4450849a626df07aa))
+* restore listing fetches (UnparsedAddress schema drift) + fast-fail set_auth on stale tokens ([#56](https://github.com/chrischall/onehome-mcp/issues/56)) ([ee23e76](https://github.com/chrischall/onehome-mcp/commit/ee23e76f3d58d2ecc2dc654ab1fdca1ff5512b5c))
+
 ## [0.11.0](https://github.com/chrischall/onehome-mcp/compare/v0.10.0...v0.11.0) (2026-05-29)
 
 
