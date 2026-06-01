@@ -17,7 +17,7 @@
  * is just the parsing + JWT-introspection helpers.
  */
 
-import { withDeadline } from '@fetchproxy/server';
+import { withDeadline } from '@chrischall/mcp-utils/fetchproxy';
 import { truncateErrorMessage } from '@chrischall/mcp-utils';
 
 export interface ParsedJwt {

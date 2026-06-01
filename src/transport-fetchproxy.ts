@@ -24,7 +24,7 @@ import {
   FetchproxyServer,
   FetchproxyBridgeDownError,
   type FetchproxyServerOpts,
-} from '@fetchproxy/server';
+} from '@chrischall/mcp-utils/fetchproxy';
 import { parseJwt, TokenExpiredError } from './auth.js';
 import type {
   BridgeStatus,
@@ -37,7 +37,7 @@ import type {
 // 0.8.0+: re-export the server's typed bridge-down error so callers
 // who previously caught onehome-mcp's local class keep working with
 // no import-path change.
-export { FetchproxyBridgeDownError } from '@fetchproxy/server';
+export { FetchproxyBridgeDownError } from '@chrischall/mcp-utils/fetchproxy';
 
 const DEFAULT_PORT = 37_149;
 const GRAPHQL_URL = 'https://services.onehome.com/graphql';

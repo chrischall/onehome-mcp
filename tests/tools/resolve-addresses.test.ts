@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { FetchproxyTimeoutError } from '@fetchproxy/server';
+import { FetchproxyTimeoutError } from '@chrischall/mcp-utils/fetchproxy';
 import { OneHomeClient } from '../../src/client.js';
 import { registerResolveAddressesTools } from '../../src/tools/resolve-addresses.js';
 import { registerByAddressTools } from '../../src/tools/by-address.js';
