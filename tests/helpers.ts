@@ -1,7 +1,3 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type {
   BridgeStatus,
   GraphQLRequest,
@@ -10,6 +6,12 @@ import type {
   RestResponse,
 } from '../src/transport.js';
 import { OneHomeClient } from '../src/client.js';
+
+// The generic in-memory MCP harness now lives in @chrischall/mcp-utils/test
+// (byte-identical to the local one it replaced). Re-exported here so the
+// domain-specific FakeTransport stays alongside it and the test files keep
+// importing both from one module.
+export { createTestHarness, parseToolResult } from '@chrischall/mcp-utils/test';
 
 /**
  * In-memory transport stub for unit tests. Each test registers a
@@ -104,49 +106,3 @@ export function ok<T>(data: T): GraphQLResponse<T> {
   };
 }
 
-/**
- * Spin up an in-memory MCP client/server pair so tests can invoke
- * tools the same way the host client would (via `client.callTool`).
- * Mirrors the harness compass-mcp uses — running through the actual
- * SDK transport catches schema-validation and shape mistakes that a
- * direct handler call would miss.
- */
-export async function createTestHarness(
-  registerFn: (server: McpServer) => void
-): Promise<{
-  client: Client;
-  server: McpServer;
-  callTool: (
-    name: string,
-    args?: Record<string, unknown>
-  ) => Promise<CallToolResult>;
-  listTools: () => Promise<{ name: string }[]>;
-  close: () => Promise<void>;
-}> {
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  registerFn(server);
-
-  const client = new Client({ name: 'test-client', version: '0.0.0' });
-  const [clientTransport, serverTransport] =
-    InMemoryTransport.createLinkedPair();
-
-  await Promise.all([
-    server.connect(serverTransport),
-    client.connect(clientTransport),
-  ]);
-
-  return {
-    client,
-    server,
-    callTool: async (name, args) =>
-      client.callTool({ name, arguments: args ?? {} }) as Promise<CallToolResult>,
-    listTools: async () => {
-      const result = await client.listTools();
-      return result.tools.map((t) => ({ name: t.name }));
-    },
-    close: async () => {
-      await client.close();
-      await server.close();
-    },
-  };
-}

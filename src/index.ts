@@ -21,8 +21,7 @@
 // JSON API that accepts direct connections — once auth is sorted
 // there's no anti-bot challenge to dodge.
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { runMcp, readEnvVar, loadDotenvSafely } from '@chrischall/mcp-utils';
 import { OneHomeClient } from './client.js';
 import { tryBuildDirectTransportFromEnv } from './transport-direct.js';
 import { FetchproxyTransport } from './transport-fetchproxy.js';
@@ -46,9 +45,12 @@ import type { OneHomeTransport } from './transport.js';
 
 const VERSION = '0.12.0'; // x-release-please-version
 
-const port = process.env.ONEHOME_WS_PORT
-  ? Number(process.env.ONEHOME_WS_PORT)
-  : undefined;
+// Local-dev convenience: load a `.env` if present. No-op (and never throws)
+// inside an mcpb bundle where creds arrive via the host's mcp_config.env.
+await loadDotenvSafely();
+
+const wsPort = readEnvVar('ONEHOME_WS_PORT');
+const port = wsPort ? Number(wsPort) : undefined;
 
 const direct = tryBuildDirectTransportFromEnv(process.env);
 let transport: OneHomeTransport;
@@ -76,25 +78,6 @@ try {
   );
 }
 
-const server = new McpServer({ name: 'onehome-mcp', version: VERSION });
-
-registerUserTools(server, client);
-registerSavedTools(server, client);
-registerSavedWithListingsTools(server, client);
-registerSearchTools(server, client);
-registerPropertyTools(server, client);
-registerPhotosTools(server, client);
-registerCompareTools(server, client);
-registerBulkGetTools(server, client);
-registerSchoolsTools(server, client);
-registerGraphqlTool(server, client);
-registerMortgageTools(server);
-registerAffordabilityTools(server);
-registerHealthcheckTools(server, client);
-registerByAddressTools(server, client);
-registerResolveAddressesTools(server, client);
-registerAuthTools(server, client);
-
 const modeBanner = {
   env_token: 'auth: ONEHOME_TOKEN (direct bearer)',
   magic_link: 'auth: ONEHOME_MAGIC_LINK (direct bearer extracted from URL)',
@@ -103,18 +86,31 @@ const modeBanner = {
   })`,
 }[mode];
 
-console.error(
-  `[onehome-mcp] v${VERSION} — ${modeBanner}. ` +
+await runMcp({
+  name: 'onehome-mcp',
+  version: VERSION,
+  deps: client,
+  tools: [
+    registerUserTools,
+    registerSavedTools,
+    registerSavedWithListingsTools,
+    registerSearchTools,
+    registerPropertyTools,
+    registerPhotosTools,
+    registerCompareTools,
+    registerBulkGetTools,
+    registerSchoolsTools,
+    registerGraphqlTool,
+    (server) => registerMortgageTools(server),
+    (server) => registerAffordabilityTools(server),
+    registerHealthcheckTools,
+    registerByAddressTools,
+    registerResolveAddressesTools,
+    registerAuthTools,
+  ],
+  banner:
+    `[onehome-mcp] v${VERSION} — ${modeBanner}. ` +
     'This project was developed and is maintained by AI (Claude). ' +
-    'Use at your own discretion.'
-);
-
-const shutdown = async () => {
-  await client.close();
-  process.exit(0);
-};
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-
-const stdio = new StdioServerTransport();
-await server.connect(stdio);
+    'Use at your own discretion.',
+  shutdown: { onSignal: () => client.close() },
+});
