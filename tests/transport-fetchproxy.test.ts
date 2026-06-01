@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { FetchproxyServerOpts } from '@fetchproxy/server';
+import type { FetchproxyServerOpts } from '@chrischall/mcp-utils/fetchproxy';
 
 const constructorCalls: FetchproxyServerOpts[] = [];
 let captureBehavior: () => Promise<string> = async () => 'Bearer mock';
@@ -8,10 +8,10 @@ let captureCallCount = 0;
 // Keep the real FetchproxyBridgeDownError around — the mocked server
 // throws an instance of it to simulate the post-retry surface the real
 // 0.8.0 server presents.
-vi.mock('@fetchproxy/server', async () => {
-  const actual = await vi.importActual<typeof import('@fetchproxy/server')>(
-    '@fetchproxy/server',
-  );
+vi.mock('@chrischall/mcp-utils/fetchproxy', async () => {
+  const actual = await vi.importActual<
+    typeof import('@chrischall/mcp-utils/fetchproxy')
+  >('@chrischall/mcp-utils/fetchproxy');
   class MockFetchproxyServer {
     public role: string | null = 'mock';
     constructor(opts: FetchproxyServerOpts) {

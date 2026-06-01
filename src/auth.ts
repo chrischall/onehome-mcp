@@ -17,7 +17,8 @@
  * is just the parsing + JWT-introspection helpers.
  */
 
-import { withDeadline } from '@fetchproxy/server';
+import { withDeadline } from '@chrischall/mcp-utils/fetchproxy';
+import { truncateErrorMessage } from '@chrischall/mcp-utils';
 
 export interface ParsedJwt {
   header: Record<string, unknown>;
@@ -210,7 +211,7 @@ export class CheckTokenError extends Error {
       `OneHome /api/authentication/checkToken rejected the email token ` +
         `(HTTP ${status}). The token may be expired or malformed — ask your ` +
         `real-estate agent to resend the magic link. Upstream body: ` +
-        body.slice(0, 200)
+        truncateErrorMessage(body, 200)
     );
     this.name = 'CheckTokenError';
     this.status = status;
@@ -315,10 +316,7 @@ export async function exchangeEmailToken(
   }
   const sessionToken = parsed.sessionToken;
   if (typeof sessionToken !== 'string' || sessionToken.length === 0) {
-    throw new CheckTokenError(
-      status,
-      'response missing sessionToken: ' + text.slice(0, 200)
-    );
+    throw new CheckTokenError(status, `response missing sessionToken: ${text}`);
   }
   const pickString = (k: string): string | undefined =>
     typeof parsed[k] === 'string' ? (parsed[k] as string) : undefined;

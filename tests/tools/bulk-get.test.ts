@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { BRIDGE_CONCURRENCY, FetchproxyTimeoutError } from '@fetchproxy/server';
+import { BRIDGE_CONCURRENCY, FetchproxyTimeoutError } from '@chrischall/mcp-utils/fetchproxy';
 import { OneHomeClient } from '../../src/client.js';
 import { registerBulkGetTools } from '../../src/tools/bulk-get.js';
 import { FakeTransport, ok, createTestHarness } from '../helpers.js';

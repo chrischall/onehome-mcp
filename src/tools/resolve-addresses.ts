@@ -5,7 +5,7 @@ import {
   retryOnceOnTimeout,
   classifyRowError,
   BRIDGE_CONCURRENCY,
-} from '@fetchproxy/server';
+} from '@chrischall/mcp-utils/fetchproxy';
 import type { OneHomeClient } from '../client.js';
 import { textResult } from '../mcp.js';
 import {
