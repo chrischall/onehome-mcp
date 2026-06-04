@@ -42,7 +42,6 @@ export { FetchproxyBridgeDownError } from '@chrischall/mcp-utils/fetchproxy';
 const DEFAULT_PORT = 37_149;
 const GRAPHQL_URL = 'https://services.onehome.com/graphql';
 const REST_BASE = 'https://services.onehome.com/api';
-const GRAPHQL_URL_PATTERN = 'https://services.onehome.com/graphql*';
 const ORIGIN = 'https://portal.onehome.com';
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -120,7 +119,8 @@ export class FetchproxyTransport implements OneHomeTransport {
       capabilities: ['capture_request_header'],
       captureHeaders: [
         {
-          urlPattern: GRAPHQL_URL_PATTERN,
+          host: 'services.onehome.com',
+          path: '/graphql*',
           headerName: 'Authorization',
         },
       ],
