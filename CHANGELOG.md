@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/chrischall/onehome-mcp/compare/v0.12.0...v0.12.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* migrate captureHeaders to [@fetchproxy](https://github.com/fetchproxy) 1.0.0 { host, path?, headerName } ([#71](https://github.com/chrischall/onehome-mcp/issues/71)) ([c455bcc](https://github.com/chrischall/onehome-mcp/commit/c455bcc919cacc1fb14cf347c4f63b08a5d90a22))
+
 ## [0.12.0](https://github.com/chrischall/onehome-mcp/compare/v0.11.0...v0.12.0) (2026-05-29)
 
 

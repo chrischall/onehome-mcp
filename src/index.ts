@@ -43,7 +43,7 @@ import { registerResolveAddressesTools } from './tools/resolve-addresses.js';
 import { registerAuthTools } from './tools/auth.js';
 import type { OneHomeTransport } from './transport.js';
 
-const VERSION = '0.12.0'; // x-release-please-version
+const VERSION = '0.12.1'; // x-release-please-version
 
 // Local-dev convenience: load a `.env` if present. No-op (and never throws)
 // inside an mcpb bundle where creds arrive via the host's mcp_config.env.
