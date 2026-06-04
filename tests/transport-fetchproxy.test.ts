@@ -67,7 +67,8 @@ describe('FetchproxyTransport — capability declaration', () => {
     const opts = constructorCalls[0]!;
     expect(opts.captureHeaders).toEqual([
       {
-        urlPattern: 'https://services.onehome.com/graphql*',
+        host: 'services.onehome.com',
+        path: '/graphql*',
         headerName: 'Authorization',
       },
     ]);
