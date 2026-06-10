@@ -21,9 +21,11 @@
  */
 
 import {
+  createFetchproxyTransport,
   FetchproxyServer,
   FetchproxyBridgeDownError,
   type FetchproxyServerOpts,
+  type FetchproxyTransport as FetchproxyTransportAdapter,
 } from '@chrischall/mcp-utils/fetchproxy';
 import { parseJwt, TokenExpiredError } from './auth.js';
 import type {
@@ -86,12 +88,26 @@ export interface FetchproxyTransportOptions {
   fetchImpl?: typeof fetch;
   /** Test seam: skip listen() / capture, supply a pre-baked token. */
   _testToken?: string;
+  /**
+   * Test seam: factory that constructs the underlying `FetchproxyServer`.
+   * Forwarded to `createFetchproxyTransport`'s `createServer` so a vitest can
+   * inject a mock server (capturing the ctor opts, stubbing
+   * `captureRequestHeader` / `bridgeHealth`) WITHOUT `vi.mock`-ing the whole
+   * `@chrischall/mcp-utils/fetchproxy` module.
+   */
+  createServer?: (opts: FetchproxyServerOpts) => FetchproxyServer;
 }
 
 export class FetchproxyTransport implements OneHomeTransport {
-  private readonly bridge: FetchproxyServer;
-  private readonly port: number;
-  private readonly serverVersion: string;
+  // createFetchproxyTransport owns the FetchproxyServer construction, the
+  // listen() lifecycle, the canonical startup banner (`logListening: true`),
+  // and the `status()` serverVersion projection. We keep this thin class for
+  // the Pattern-B capture logic that's onehome-specific: snapshot the
+  // Authorization header once, then make DIRECT Node fetches to
+  // services.onehome.com (we never proxy GraphQL/REST through the bridge, so
+  // the adapter's fetch/requestJson verb passthroughs go unused). The captured
+  // bearer drives graphql()/rest() below.
+  private readonly inner: FetchproxyTransportAdapter;
   private readonly fetchImpl: typeof fetch;
   private token: string | null = null;
   private tokenExpiresAt: number | null = null;
@@ -102,11 +118,9 @@ export class FetchproxyTransport implements OneHomeTransport {
   private capturePromise: Promise<string> | null = null;
 
   constructor(opts: FetchproxyTransportOptions) {
-    this.port = opts.port ?? DEFAULT_PORT;
-    this.serverVersion = opts.version;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-    const config: FetchproxyServerOpts = {
-      port: this.port,
+    this.inner = createFetchproxyTransport({
+      port: opts.port ?? DEFAULT_PORT,
       serverName: 'onehome-mcp',
       version: opts.version,
       domains: ['onehome.com'],
@@ -124,29 +138,38 @@ export class FetchproxyTransport implements OneHomeTransport {
           headerName: 'Authorization',
         },
       ],
+      // Emit the canonical fleet banner on start() — stderr only (stdout is the
+      // MCP JSON-RPC channel). This replaces the hand-rolled console.error.
+      logListening: true,
+      // Pattern-B note: onehome doesn't pin a `defaultSubdomain`. The verb
+      // adapters (fetch/requestJson) are unused — graphql()/rest() fetch
+      // services.onehome.com directly — and the captureHeaders host is pinned
+      // explicitly above, so there's no apex/www choice to make here.
+      ...(opts.createServer ? { createServer: opts.createServer } : {}),
       // 0.8.0+ server handles SW-eviction lazy-revive internally
       // (default 2000ms) and throws FetchproxyBridgeDownError on
       // persistent failure.
       // keepAliveIntervalMs is no longer set here: @fetchproxy/server 0.10.0
       // defaults it to 25_000 — exactly the cadence we relied on for the
       // capture-mode token-refresh window (fetchproxy#72).
-    };
-    this.bridge = new FetchproxyServer(config);
+    });
     if (opts._testToken) this.setToken(opts._testToken);
+  }
+
+  /** The wrapped FetchproxyServer — onehome only needs captureRequestHeader. */
+  private get bridge(): FetchproxyServer {
+    return this.inner.server;
   }
 
   async start(): Promise<void> {
     if (this.token) return;
-    await this.bridge.listen();
-    console.error(
-      `[onehome-mcp:bridge] listening on 127.0.0.1:${this.port} ` +
-        `(role=${this.bridge.role ?? 'unknown'}, version=${this.serverVersion}). ` +
-        `Waiting for the first portal.onehome.com GraphQL request to capture the Authorization header.`
-    );
+    // Delegates to the factory: server.listen() + the canonical
+    // `[onehome-mcp:bridge] listening …` banner (logListening: true).
+    await this.inner.start();
   }
 
   async close(): Promise<void> {
-    await this.bridge.close();
+    await this.inner.close();
   }
 
   status(): BridgeStatus {
@@ -154,8 +177,9 @@ export class FetchproxyTransport implements OneHomeTransport {
     // liveness for us via bridgeHealth().lastExtensionMessageAt — pass
     // it through so consumers (healthcheck tool, session-context tool)
     // can show extension liveness independently of the last capture or
-    // last GraphQL call.
-    const health = this.bridge.bridgeHealth();
+    // last GraphQL call. The factory's status() is bridgeHealth() with
+    // `serverVersion` pinned to the version opt, so both come from there.
+    const health = this.inner.status();
     return {
       authMode: 'fetchproxy_capture',
       authReady: this.token !== null,
@@ -170,9 +194,9 @@ export class FetchproxyTransport implements OneHomeTransport {
       lastFailureReason: this.lastFailureReason,
       consecutiveFailures: this.consecutiveFailures,
       fetchproxy: {
-        role: this.bridge.role,
-        port: this.port,
-        serverVersion: this.serverVersion,
+        role: health.role,
+        port: health.port,
+        serverVersion: health.serverVersion,
         lastExtensionMessageAt: health.lastExtensionMessageAt,
       },
     };

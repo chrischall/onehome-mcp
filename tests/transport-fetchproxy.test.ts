@@ -1,35 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { FetchproxyServerOpts } from '@chrischall/mcp-utils/fetchproxy';
+import type {
+  FetchproxyServer,
+  FetchproxyServerOpts,
+} from '@chrischall/mcp-utils/fetchproxy';
+import {
+  FetchproxyTransport,
+  FetchproxyAuthCaptureError,
+  FetchproxyBridgeDownError,
+  type FetchproxyTransportOptions,
+} from '../src/transport-fetchproxy.js';
+
+// Adapter-level tests for the onehome FetchproxyTransport.
+//
+// As of @chrischall/mcp-utils 0.10.0, the FetchproxyServer construction, the
+// listen() lifecycle, the canonical startup banner, and the status()
+// serverVersion projection are factored into `createFetchproxyTransport`.
+// onehome's FetchproxyTransport delegates those to the factory and keeps only
+// its Pattern-B capture logic (snapshot the Authorization header, then DIRECT
+// Node fetches to services.onehome.com).
+//
+// These tests inject a mock FetchproxyServer through the transport's
+// `createServer` seam (forwarded to `createFetchproxyTransport`'s own
+// `createServer`) — no `vi.mock('@chrischall/mcp-utils/fetchproxy')` needed.
 
 const constructorCalls: FetchproxyServerOpts[] = [];
 let captureBehavior: () => Promise<string> = async () => 'Bearer mock';
 let captureCallCount = 0;
 
-// Keep the real FetchproxyBridgeDownError around — the mocked server
-// throws an instance of it to simulate the post-retry surface the real
-// 0.8.0 server presents.
-vi.mock('@chrischall/mcp-utils/fetchproxy', async () => {
-  const actual = await vi.importActual<
-    typeof import('@chrischall/mcp-utils/fetchproxy')
-  >('@chrischall/mcp-utils/fetchproxy');
-  class MockFetchproxyServer {
-    public role: string | null = 'mock';
-    constructor(opts: FetchproxyServerOpts) {
-      constructorCalls.push(opts);
-    }
+// The mock server the seam returns. `bridgeHealth()` carries serverVersion the
+// factory's status() OVERRIDES with the version opt — so a status() assertion of
+// '0.0.0-test' proves the version is sourced from the factory, not this stub.
+function makeMockServer(opts: FetchproxyServerOpts): FetchproxyServer {
+  const server = {
+    role: 'mock' as string | null,
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- test stub
-    async listen(): Promise<void> {}
+    async listen(): Promise<void> {},
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- test stub
-    async close(): Promise<void> {}
+    async close(): Promise<void> {},
     async captureRequestHeader(): Promise<string> {
       captureCallCount += 1;
       return captureBehavior();
-    }
+    },
     bridgeHealth() {
       return {
         role: this.role,
         port: 0,
-        serverVersion: '0.0.0-test',
+        serverVersion: 'ignored-stub-version',
         fetchTimeoutMs: 0,
         bridgeReviveDelayMs: 0,
         lastSuccessAt: null,
@@ -38,13 +54,18 @@ vi.mock('@chrischall/mcp-utils/fetchproxy', async () => {
         consecutiveFailures: 0,
         lastExtensionMessageAt: null,
       };
-    }
-  }
-  return {
-    ...actual,
-    FetchproxyServer: MockFetchproxyServer,
+    },
   };
-});
+  constructorCalls.push(opts);
+  return server as unknown as FetchproxyServer;
+}
+
+// Helper: construct a transport wired to the mock server seam.
+function newTransport(
+  opts: Omit<FetchproxyTransportOptions, 'createServer'>,
+): FetchproxyTransport {
+  return new FetchproxyTransport({ ...opts, createServer: makeMockServer });
+}
 
 beforeEach(() => {
   constructorCalls.length = 0;
@@ -53,17 +74,15 @@ beforeEach(() => {
 });
 
 describe('FetchproxyTransport — capability declaration', () => {
-  it("declares 'capture_request_header' on the FetchproxyServer constructor", async () => {
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    new FetchproxyTransport({ version: '0.0.0-test' });
+  it("declares 'capture_request_header' on the FetchproxyServer constructor", () => {
+    newTransport({ version: '0.0.0-test' });
     expect(constructorCalls.length).toBe(1);
     const opts = constructorCalls[0]!;
     expect(opts.capabilities).toEqual(['capture_request_header']);
   });
 
-  it('declares the captureHeaders entry the runtime needs to snapshot the Authorization header', async () => {
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    new FetchproxyTransport({ version: '0.0.0-test' });
+  it('declares the captureHeaders entry the runtime needs to snapshot the Authorization header', () => {
+    newTransport({ version: '0.0.0-test' });
     const opts = constructorCalls[0]!;
     expect(opts.captureHeaders).toEqual([
       {
@@ -74,24 +93,22 @@ describe('FetchproxyTransport — capability declaration', () => {
     ]);
   });
 
-  it("identifies the bridge as 'onehome-mcp' against the onehome.com domain", async () => {
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    new FetchproxyTransport({ version: '0.0.0-test' });
+  it("identifies the bridge as 'onehome-mcp' against the onehome.com domain", () => {
+    newTransport({ version: '0.0.0-test' });
     const opts = constructorCalls[0]!;
     expect(opts.serverName).toBe('onehome-mcp');
     expect(opts.domains).toEqual(['onehome.com']);
   });
 
-  it('does NOT pass bridgeReviveDelayMs (relies on server-side default)', async () => {
+  it('does NOT pass bridgeReviveDelayMs (relies on server-side default)', () => {
     // 0.8.0+ server defaults bridgeReviveDelayMs to 2000. The adapter
     // doesn't override or expose a knob — anyone needing a different
     // value can construct their own FetchproxyServer.
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    new FetchproxyTransport({ version: '0.0.0-test' });
+    newTransport({ version: '0.0.0-test' });
     expect(constructorCalls[0]!.bridgeReviveDelayMs).toBeUndefined();
   });
 
-  it('does NOT pass keepAliveIntervalMs (relies on the server-side 25s default)', async () => {
+  it('does NOT pass keepAliveIntervalMs (relies on the server-side 25s default)', () => {
     // Onehome is Pattern B: the bridge handles a single one-shot
     // Authorization capture at startup, but it stays held open and is
     // hit again whenever the captured JWT expires (see graphql() →
@@ -100,15 +117,21 @@ describe('FetchproxyTransport — capability declaration', () => {
     // round-trip on every token rollover. We used to pin a 25s cadence
     // here; @fetchproxy/server 0.10.0 now defaults keepAliveIntervalMs to
     // exactly 25_000, so the adapter no longer passes it (fetchproxy#72).
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    new FetchproxyTransport({ version: '0.0.0-test' });
+    newTransport({ version: '0.0.0-test' });
     expect(constructorCalls[0]!.keepAliveIntervalMs).toBeUndefined();
+  });
+
+  it('does NOT pin a defaultSubdomain (Pattern B uses direct fetches, not the verb adapters)', () => {
+    newTransport({ version: '0.0.0-test' });
+    // createFetchproxyTransport strips debugEnvVar/defaultSubdomain/etc. before
+    // building the server opts, so the seam never sees defaultSubdomain — assert
+    // it isn't smuggled into the FetchproxyServer construction either.
+    expect(constructorCalls[0]!).not.toHaveProperty('defaultSubdomain');
   });
 });
 
 describe('FetchproxyTransport — capture error surface (post-server-retry)', () => {
   it('re-throws FetchproxyBridgeDownError from the server unwrapped', async () => {
-    const { FetchproxyBridgeDownError } = await import('@fetchproxy/server');
     captureBehavior = async () => {
       throw new FetchproxyBridgeDownError({
         originalError: 'Could not establish connection.',
@@ -116,8 +139,7 @@ describe('FetchproxyTransport — capture error surface (post-server-retry)', ()
         op: 'capture_request_header',
       });
     };
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({ version: '0.0.0-test' });
+    const t = newTransport({ version: '0.0.0-test' });
     await t.start();
     await expect(
       t.graphql({ operationName: 'X', query: 'query X { ok }' }),
@@ -131,10 +153,7 @@ describe('FetchproxyTransport — capture error surface (post-server-retry)', ()
     captureBehavior = async () => {
       throw new Error('timeout: no matching request observed within 120000ms');
     };
-    const { FetchproxyTransport, FetchproxyAuthCaptureError } = await import(
-      '../src/transport-fetchproxy.js'
-    );
-    const t = new FetchproxyTransport({ version: '0.0.0-test' });
+    const t = newTransport({ version: '0.0.0-test' });
     await t.start();
     await expect(
       t.graphql({ operationName: 'X', query: 'query X { ok }' }),
@@ -142,20 +161,20 @@ describe('FetchproxyTransport — capture error surface (post-server-retry)', ()
   });
 
   it('re-exports FetchproxyBridgeDownError so callers importing from this module keep working', async () => {
-    const mod = await import('../src/transport-fetchproxy.js');
     const fp = await import('@fetchproxy/server');
-    expect(mod.FetchproxyBridgeDownError).toBe(fp.FetchproxyBridgeDownError);
+    expect(FetchproxyBridgeDownError).toBe(fp.FetchproxyBridgeDownError);
   });
 });
 
 describe('FetchproxyTransport — status() surface', () => {
-  it('surfaces bridgeHealth().lastExtensionMessageAt under fetchproxy', async () => {
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({ version: '0.0.0-test' });
+  it('surfaces bridgeHealth().lastExtensionMessageAt under fetchproxy', () => {
+    const t = newTransport({ version: '0.0.0-test' });
     const s = t.status();
     expect(s.fetchproxy).toBeDefined();
     expect(s.fetchproxy).toMatchObject({
       role: 'mock',
+      // serverVersion comes from the factory (it overrides bridgeHealth()'s),
+      // proving status().serverVersion is sourced from createFetchproxyTransport.
       serverVersion: '0.0.0-test',
       lastExtensionMessageAt: null,
     });
@@ -168,8 +187,7 @@ describe('FetchproxyTransport — successful capture', () => {
     const stubFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
     );
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({
+    const t = newTransport({
       version: '0.0.0-test',
       fetchImpl: stubFetch as unknown as typeof fetch,
     });
@@ -210,8 +228,7 @@ describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())
     const stubFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({
+    const t = newTransport({
       version: '0.0.0-test',
       fetchImpl: stubFetch as unknown as typeof fetch,
     });
@@ -237,8 +254,7 @@ describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
       );
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({
+    const t = newTransport({
       version: '0.0.0-test',
       fetchImpl: stubFetch as unknown as typeof fetch,
     });
@@ -267,8 +283,7 @@ describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())
     const stubFetch = vi
       .fn()
       .mockImplementation(async () => new Response('Forbidden', { status: 403 }));
-    const { FetchproxyTransport } = await import('../src/transport-fetchproxy.js');
-    const t = new FetchproxyTransport({
+    const t = newTransport({
       version: '0.0.0-test',
       fetchImpl: stubFetch as unknown as typeof fetch,
     });
