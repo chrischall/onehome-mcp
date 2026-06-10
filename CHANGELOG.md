@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.2](https://github.com/chrischall/onehome-mcp/compare/v0.12.1...v0.12.2) (2026-06-10)
+
+
+### Refactor
+
+* adopt mcp-utils 0.10 createFetchproxyTransport in the bridge transport ([#78](https://github.com/chrischall/onehome-mcp/issues/78)) ([0000360](https://github.com/chrischall/onehome-mcp/commit/00003602b78e6d7e00ce441dba68a30fac20f1cf))
+* adopt mcp-utils createCachedJsonArrayLoader for communities ([#76](https://github.com/chrischall/onehome-mcp/issues/76)) ([c050ef8](https://github.com/chrischall/onehome-mcp/commit/c050ef81fd1f41710f305f6a2574feba86dbcaf5))
+
 ## [0.12.1](https://github.com/chrischall/onehome-mcp/compare/v0.12.0...v0.12.1) (2026-06-04)
 
 
