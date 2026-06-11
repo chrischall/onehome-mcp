@@ -1,5 +1,9 @@
 # onehome-mcp
 
+[![CI](https://github.com/chrischall/onehome-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/chrischall/onehome-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/onehome-mcp)](https://www.npmjs.com/package/onehome-mcp)
+[![license](https://img.shields.io/npm/l/onehome-mcp)](LICENSE)
+
 MCP server for [OneHome](https://www.onehome.com/) (CoreLogic) — search the listings your real-estate agent curated for you, fetch property details + photos, compare houses side-by-side, and run mortgage / affordability math from within Claude.
 
 Sister project to [zillow-mcp](https://github.com/chrischall/zillow-mcp), [redfin-mcp](https://github.com/chrischall/redfin-mcp), [compass-mcp](https://github.com/chrischall/compass-mcp), and [homes-mcp](https://github.com/chrischall/homes-mcp). Same tool ergonomics — different upstream auth model.
