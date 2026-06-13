@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.3](https://github.com/chrischall/onehome-mcp/compare/v0.12.2...v0.12.3) (2026-06-13)
+
+
+### Bug Fixes
+
+* bot PRs bypass the CI gate unconditionally ([#82](https://github.com/chrischall/onehome-mcp/issues/82)) ([11f405e](https://github.com/chrischall/onehome-mcp/commit/11f405e0cc89b4718fd1e23673e085c3e686179a))
+
+
+### Documentation
+
+* add MIT LICENSE file and README badges ([#79](https://github.com/chrischall/onehome-mcp/issues/79)) ([603f543](https://github.com/chrischall/onehome-mcp/commit/603f543d70d675b068ba8abed98199481f8aaa07))
+
 ## [0.12.2](https://github.com/chrischall/onehome-mcp/compare/v0.12.1...v0.12.2) (2026-06-10)
 
 
