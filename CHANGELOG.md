@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.4](https://github.com/chrischall/onehome-mcp/compare/v0.12.3...v0.12.4) (2026-06-15)
+
+
+### Documentation
+
+* refresh CLAUDE.md for multi-session model + auto-review follow-up convention ([#88](https://github.com/chrischall/onehome-mcp/issues/88)) ([b282a53](https://github.com/chrischall/onehome-mcp/commit/b282a5340deedb4b92818a15689d003832ce5344))
+* require Conventional Commit PR titles for release-please ([#86](https://github.com/chrischall/onehome-mcp/issues/86)) ([074f183](https://github.com/chrischall/onehome-mcp/commit/074f1837bd2008d7198dab95340ca7acf5eecbee))
+
 ## [0.12.3](https://github.com/chrischall/onehome-mcp/compare/v0.12.2...v0.12.3) (2026-06-13)
 
 
