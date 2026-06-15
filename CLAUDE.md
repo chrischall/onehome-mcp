@@ -4,7 +4,7 @@ Guidance for Claude working in this repo.
 
 ## TL;DR
 
-v0.6.0: OneHome (CoreLogic) MCP server. OneHome isn't a public realty site — buyers reach it through a private "magic link" their real-estate agent emails (`https://portal.onehome.com/...?token=eyJ...`). The portal is an Angular SPA backed by `services.onehome.com/graphql` (real GraphQL) plus a few `services.onehome.com/api/...` REST endpoints (LocalLogic schools/scores, the token-exchange bootstrap). All authenticated requests go through `Authorization: Bearer <sessionToken>`.
+OneHome (CoreLogic) MCP server. OneHome isn't a public realty site — buyers reach it through a private "magic link" their real-estate agent emails (`https://portal.onehome.com/...?token=eyJ...`). The portal is an Angular SPA backed by `services.onehome.com/graphql` (real GraphQL) plus a few `services.onehome.com/api/...` REST endpoints (LocalLogic schools/scores, the token-exchange bootstrap). All authenticated requests go through `Authorization: Bearer <sessionToken>`.
 
 So onehome-mcp departs from the Pattern A / Pattern B fetchproxy split the other realty MCPs use. Every tool call is a **direct Node fetch to `services.onehome.com`** with an `Authorization: Bearer <sessionToken>` header attached. The interesting parts are *where the bearer comes from* and *the email-token → sessionToken bootstrap*:
 
@@ -14,6 +14,8 @@ So onehome-mcp departs from the Pattern A / Pattern B fetchproxy split the other
 
 Once the bearer is acquired we don't route subsequent calls through fetchproxy — there's no anti-bot challenge to dodge at `services.onehome.com`, so the round-trip through the tab would just add latency and a bridge-down failure mode.
 
+**Multi-session.** `OneHomeClient` keeps a *registry* of transports keyed by `session_id`, one marked active (the single-session case is just a one-entry registry). A buyer holding shares across multiple agents/MLSes adds each via `onehome_set_auth`; per-request routing prefers the session whose `sessionContext.mlsId` matches a listing's `~MLS` OSK suffix (`~CANOPY`, `~HCAOR`, …), else the active session answers. Switch the default with `onehome_set_active_session(session_id)`. See `src/client.ts` for the routing rule.
+
 ## Tool surface
 
 | Tool | File | Upstream | Auth |
@@ -22,9 +24,13 @@ Once the bearer is acquired we don't route subsequent calls through fetchproxy �
 | `onehome_get_groups` | `tools/user.ts` | Same — GraphQL `user.groups` for agents, synthesizes a one-entry list from session context for consumer-shares | yes |
 | `onehome_get_session_context` | `tools/user.ts` | (local — reflects `client.bridgeStatus().sessionContext`) | no |
 | `onehome_get_saved_search` | `tools/saved.ts` | `GetSavedSearchBySearchId` (consumer-readable; the by-groupId variant is agent-only) | yes |
+| `onehome_get_saved_search_with_listings` | `tools/saved-with-listings.ts` | Combo: `GetSavedSearchBySearchId` → `GetSavedListings` in one call (the "show me my saved homes" flow). Returns `{ saved_search, listings, count, page_info }` | yes |
 | `onehome_search_properties` | `tools/search.ts` | With `saved_search_id`: `GetSavedSearchBySearchId` → resolves `listingIds`, then `GetSavedListings (listingsBySavedSearchId)`. Without: `GetListings` | yes |
 | `onehome_search_suggestions` | `tools/search.ts` | `ListingSuggestionsSearch` | yes |
+| `onehome_get_by_address` | `tools/by-address.ts` | Address → listing URL via a 2-rung ladder: `ListingSuggestionsSearch` first, then a `GetSavedListings`/`GetListings` fallback pool, matched with `@chrischall/realty-core`'s `addressMatch` | yes |
+| `onehome_resolve_addresses` | `tools/resolve-addresses.ts` | Bulk address→URL (up to 100). Walks the *same* ladder as `get_by_address` via the shared `resolveByAddressOnce` helper; fans out with the `@chrischall/mcp-utils/fetchproxy` bulk helpers | yes |
 | `onehome_get_property` | `tools/properties.ts` | `ListingById` | yes |
+| `onehome_bulk_get` | `tools/bulk-get.ts` | Bulk `ListingById` by id (up to 200), one row per id, per-row error capture; bounded concurrency + retry-once via `@chrischall/mcp-utils/fetchproxy` | yes |
 | `onehome_get_property_photos` | `tools/photos.ts` | `MediaListingById` | yes |
 | `onehome_compare_properties` | `tools/compare.ts` | Concurrent `ListingById` calls | yes |
 | `onehome_get_schools` | `tools/schools.ts` | REST `GET /api/locallogic/schools?lat=&lng=&locale=` (often 403 for consumer sessions — surfaces a clean error) | yes |
@@ -33,7 +39,8 @@ Once the bearer is acquired we don't route subsequent calls through fetchproxy �
 | `onehome_calculate_mortgage` | `tools/mortgage.ts` | — | no (local) |
 | `onehome_calculate_affordability` | `tools/affordability.ts` | — | no (local) |
 | `onehome_healthcheck` | `tools/healthcheck.ts` | `GetSavedSearchBySearchId` when session context has one; else `GetOneHomeUser` | yes |
-| `onehome_set_auth` | `tools/auth.ts` | (local — `parseAuthInput` → new `DirectTransport` → POST `/api/authentication/checkToken` if email-token) | no (it's how you *acquire* auth) |
+| `onehome_set_auth` | `tools/auth.ts` | (local — `parseAuthInput` → new `DirectTransport` → POST `/api/authentication/checkToken` if email-token; **registers** the resolved bearer as a new session and marks it active) | no (it's how you *acquire* auth) |
+| `onehome_set_active_session` | `tools/auth.ts` | (local — `client.setActiveSession(session_id)`; force which registered session answers non-`~MLS`-routed requests) | no |
 
 ## Architecture
 
@@ -50,13 +57,20 @@ src/
   auth.ts               # parseJwt, isJwtShape, extractTokenFromMagicLink,
                         #   exchangeEmailToken + typed errors.
   client.ts             # OneHomeClient: unwraps `data` / throws on `errors`;
-                        #   .rest() for the LocalLogic endpoints.
+                        #   .rest() for the LocalLogic endpoints. Owns the
+                        #   multi-session registry (registerSession /
+                        #   setActiveSession / listSessions) and the
+                        #   `~MLS`-suffix → session routing rule.
   queries.ts            # canonical GraphQL documents — field shapes mirror
                         #   the actual portal bundle fragments (User: `id`
                         #   not `userId`; SavedSearch: `listingIds` /
                         #   `userQuery` / `polygon`; BrowseParameter:
                         #   `pageInput { pageNum, size }`).
   format.ts             # RawListingDetail → FormattedListing flattening.
+  features.ts           # description → `extracted_features` (community
+                        #   vocabulary; "finished" ⊄ "unfinished" guard).
+  address-format.ts     # shared street/address-string joins used by
+                        #   format + by-address + resolve-addresses.
   url.ts                # listing-id (OSK) extraction from URL/path/raw.
   mcp.ts                # textResult() wrapper.
   tools/
@@ -66,12 +80,25 @@ src/
                         #   GraphQL `user { }` field is access-denied
                         #   (consumer-share sessions).
     saved.ts            # onehome_get_saved_search (GetSavedSearchBySearchId).
+    saved-with-listings.ts # onehome_get_saved_search_with_listings —
+                        #   GetSavedSearchBySearchId + GetSavedListings combo.
     search.ts           # onehome_search_properties — with `saved_search_id`,
                         #   resolves SavedSearch.listingIds first then inflates
                         #   via listingsBySavedSearchId; without, falls back to
                         #   the raw listings(groupId, browseParameter) form.
                         #   Plus onehome_search_suggestions.
     properties.ts       # onehome_get_property (ListingById + format).
+                        #   Exports fetchListingDetail for the bulk path.
+    bulk-get.ts         # onehome_bulk_get — up to 200 ListingById in one
+                        #   call, bounded concurrency + retry-once, per-row
+                        #   error capture (no side-by-side summary).
+    by-address.ts       # onehome_get_by_address — 2-rung address→URL ladder
+                        #   (suggestions, then a search fallback pool) using
+                        #   realty-core addressMatch. Shared helpers
+                        #   (buildAddressQuery / resolveByAddressOnce) feed
+                        #   the bulk resolver.
+    resolve-addresses.ts # onehome_resolve_addresses — bulk address→URL,
+                        #   same ladder as by-address via resolveByAddressOnce.
     photos.ts           # onehome_get_property_photos (MediaListingById).
     compare.ts          # onehome_compare_properties (concurrent
                         #   ListingById, per-row error capture).
@@ -84,6 +111,10 @@ src/
     affordability.ts    # local 28/36 DTI solver.
     healthcheck.ts      # picks GetSavedSearchBySearchId or GetOneHomeUser
                         #   depending on what the session can reach.
+    auth.ts             # onehome_set_auth (register a session at runtime)
+                        #   + onehome_set_active_session (switch the active
+                        #   session). Never echoes the bearer — only a
+                        #   fingerprint.
 
 tests/                  # Mirror of src/, plus tests/helpers.ts harness.
                         #   FakeTransport stubs graphql() per operation
@@ -201,16 +232,29 @@ For every PR, apply exactly one label:
 
 The **PR title MUST be a Conventional Commit**, written user-facing (`fix(scope): …`, `feat(scope): …`), not internal shorthand. Because the repo squash-merges, the PR title *becomes the squash commit's subject line* — the only thing release-please parses to pick the version bump and changelog section. Only `feat` (minor), `fix` (patch), and `!`/`BREAKING CHANGE` (major) cut a release; `perf`/`refactor`/`docs` show in the changelog without bumping; `ci`/`test`/`build`/`chore` are recognised but hidden (see `release-please-config.json` → `changelog-sections`). A title without a conventional type is invisible to release-please — no bump, no changelog line. Prefixes in *individual commits* don't help; squash keeps only the title.
 
-**Exception for first-party dependency bumps.** When bumping a package we own (currently `@fetchproxy/server` — anything published from a chrischall-owned repo), label the PR `enhancement` or `bug` instead of `dependencies`, and use the matching commit prefix (`feat:` or `fix:`) instead of `chore:`. Those bumps deliver real product fixes or features through us, so they should drive a release-please version bump and show up under Features/Bug Fixes in the release notes — not get hidden under "Dependencies" (which doesn't trigger a release).
+**Exception for first-party dependency bumps.** When bumping a package we own (currently `@fetchproxy/server`, `@chrischall/mcp-utils`, `@chrischall/realty-core` — anything published from a chrischall-owned repo), label the PR `enhancement` or `bug` instead of `dependencies`, and use the matching commit prefix (`feat:` or `fix:`) instead of `chore:`. Those bumps deliver real product fixes or features through us, so they should drive a release-please version bump and show up under Features/Bug Fixes in the release notes — not get hidden under "Dependencies" (which doesn't trigger a release).
 
 ### How PRs merge
 
 **Don't run `gh pr merge` yourself.** The automation does it:
 
-1. `pr-auto-review.yml` runs a Claude review on every PR **except** the release-please release PR (which it deliberately skips). On a `pass` verdict it adds the `ready-to-merge` label.
+1. `pr-auto-review.yml` runs a Claude review on every PR **except** the release-please release PR (which it deliberately skips). On a `pass` OR `warn` verdict it adds the `ready-to-merge` label (`warn` = nits only, which still merge); a `warn` or `fail` verdict also opens/updates an `auto-review-followup` issue (see below). Only `fail` withholds `ready-to-merge` and blocks the merge.
 2. `auto-merge.yml`, on the `ready-to-merge` label (or on a dependabot PR), arms `gh pr merge --auto --squash`. The moment CI is green the PR squash-merges itself.
 
-For ordinary feature/fix PRs, opening with `gh pr create --label <label>` (or `--label ignore-for-release` for chores not worth a release-notes line) is the whole job. If Claude's verdict was `warn`/`fail` but you've decided to ship anyway, add the label yourself: `gh pr edit <num> --add-label ready-to-merge`.
+For ordinary feature/fix PRs, opening with `gh pr create --label <label>` (or `--label ignore-for-release` for chores not worth a release-notes line) is the whole job. If Claude's verdict was `fail` but you've decided to ship anyway, add the label yourself: `gh pr edit <num> --add-label ready-to-merge`.
+
+### Auto-review follow-up issues
+
+When a PR's auto-review verdict is `warn` or `fail`, the `chrischall/workflows` pipeline opens or updates a single `auto-review-followup` issue ("Auto-review follow-ups for PR #N") whose checklist captures every finding, and links it from the PR's `<!-- auto-review-verdict -->` comment (`📋 Tracking follow-ups: #N`). `warn` (nits only) still auto-merges — the issue carries the nits forward, so most nits are fixed in a *later* PR; `fail` blocks until the important findings are addressed on the PR itself.
+
+When asked to address the auto-review comments / review findings on a PR:
+
+1. Read the verdict comment, open the linked `auto-review-followup` issue, and treat its checklist as the work list (alongside any inline review comments).
+2. Resolve each item, checking off only what you've **verified** is genuinely fixed.
+3. If every item is resolved on the current PR, add `Closes #<issue>` to that PR's body so the merge closes it; if some are deferred, check off only the resolved ones and leave the issue open.
+4. For nits whose `warn` PR already auto-merged, address them in a follow-up PR that references `Closes #<issue>`.
+
+(Mirrors the fleet-wide convention in `~/.claude/CLAUDE.md`.)
 
 ### PR timing — only open when the feature is done
 
