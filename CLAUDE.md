@@ -54,7 +54,8 @@ src/
                         #   On start() exchanges email-token → sessionToken
                         #   via /api/authentication/checkToken when needed.
   transport-fetchproxy.ts # captureRequestHeader bootstrap → direct outbound.
-  auth.ts               # parseJwt, isJwtShape, extractTokenFromMagicLink,
+  auth.ts               # decodeJwtExpiresAtMs (mcp-utils decodeJwtClaim),
+                        #   isJwtShape, extractTokenFromMagicLink,
                         #   exchangeEmailToken + typed errors.
   client.ts             # OneHomeClient: unwraps `data` / throws on `errors`;
                         #   .rest() for the LocalLogic endpoints. Owns the

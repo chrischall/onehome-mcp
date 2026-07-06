@@ -204,7 +204,7 @@ describe('FetchproxyTransport — successful capture', () => {
 
 // A JWT whose `exp` claim is already in the past — used to drive the
 // token-expiry-drop branch. The transport reads `exp` (seconds) via
-// parseJwt and compares `exp*1000 < Date.now()`.
+// decodeJwtExpiresAtMs and compares `exp*1000 < Date.now()`.
 function expiredJwt(): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString(
     'base64url',

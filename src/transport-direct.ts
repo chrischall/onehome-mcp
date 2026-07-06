@@ -19,11 +19,11 @@
  */
 
 import {
+  decodeJwtExpiresAtMs,
   exchangeEmailToken,
   extractTokenFromMagicLink,
   isJwtShape,
   NoTokenError,
-  parseJwt,
   TokenExpiredError,
 } from './auth.js';
 import type {
@@ -116,8 +116,7 @@ export class DirectTransport implements OneHomeTransport {
     // the exchange and we can serve `status()` immediately.
     if (isJwtShape(opts.token)) {
       this.bearerToken = opts.token;
-      const parsed = parseJwt(opts.token);
-      this.bearerExpiresAt = parsed?.expiresAt ?? null;
+      this.bearerExpiresAt = decodeJwtExpiresAtMs(opts.token);
       this.bootstrapped = true;
     } else {
       this.bearerToken = '';
@@ -130,8 +129,7 @@ export class DirectTransport implements OneHomeTransport {
     // Email-token path: exchange for a sessionToken + session context.
     const check = await exchangeEmailToken(this.inputToken, this.fetchImpl);
     this.bearerToken = check.sessionToken;
-    const parsed = parseJwt(check.sessionToken);
-    this.bearerExpiresAt = parsed?.expiresAt ?? null;
+    this.bearerExpiresAt = decodeJwtExpiresAtMs(check.sessionToken);
     this.sessionContext = {
       ...(check.groupID ? { groupId: check.groupID } : {}),
       ...(check.savedSearchID ? { savedSearchId: check.savedSearchID } : {}),
