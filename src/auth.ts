@@ -18,46 +18,26 @@
  */
 
 import { withDeadline } from '@chrischall/mcp-utils/fetchproxy';
-import { truncateErrorMessage } from '@chrischall/mcp-utils';
-
-export interface ParsedJwt {
-  header: Record<string, unknown>;
-  payload: Record<string, unknown>;
-  /** Token expiry in unix-ms, derived from `payload.exp` (which is unix-seconds in standard JWT). Null when absent or non-numeric. */
-  expiresAt: number | null;
-}
+import {
+  decodeJwtClaim,
+  McpToolError,
+  truncateErrorMessage,
+} from '@chrischall/mcp-utils';
 
 /**
- * Decode a JWT enough to read its `exp` claim. Does NOT verify the
- * signature — we never had the signing key to start with, the upstream
- * server does that. This is purely for "is this token about to expire"
- * diagnostics.
+ * Decode a JWT's `exp` claim into a unix-ms timestamp. Does NOT verify
+ * the signature — we never had the signing key to start with, the
+ * upstream server does that. This is purely for "is this token about
+ * to expire" diagnostics.
  *
- * Returns null if the input doesn't look like a JWT (not three
- * dot-separated base64url segments).
+ * Thin unit-conversion wrapper over mcp-utils' `decodeJwtClaim` (which
+ * owns the base64url payload decode): standard JWT `exp` is
+ * unix-seconds, while the transports track absolute expiry in unix-ms.
+ * Returns null for an undecodable token or an absent/non-numeric `exp`.
  */
-export function parseJwt(token: string): ParsedJwt | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const decode = (seg: string): Record<string, unknown> | null => {
-    try {
-      const padded = seg + '='.repeat((4 - (seg.length % 4)) % 4);
-      const normalized = padded.replace(/-/g, '+').replace(/_/g, '/');
-      const decoded = Buffer.from(normalized, 'base64').toString('utf8');
-      const obj = JSON.parse(decoded);
-      return typeof obj === 'object' && obj !== null ? obj : null;
-    } catch {
-      return null;
-    }
-  };
-  const header = decode(parts[0]!);
-  const payload = decode(parts[1]!);
-  if (!header || !payload) return null;
-  let expiresAt: number | null = null;
-  if (typeof payload.exp === 'number' && Number.isFinite(payload.exp)) {
-    expiresAt = payload.exp * 1000;
-  }
-  return { header, payload, expiresAt };
+export function decodeJwtExpiresAtMs(token: string): number | null {
+  const exp = decodeJwtClaim(token, 'exp');
+  return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null;
 }
 
 /**
@@ -86,16 +66,19 @@ export function extractTokenFromMagicLink(link: string): string | null {
   return value && value.length > 0 ? value : null;
 }
 
-export class TokenExpiredError extends Error {
+export class TokenExpiredError extends McpToolError {
   readonly expiredAt: number;
   constructor(expiredAt: number) {
     const ageSec = Math.round((Date.now() - expiredAt) / 1000);
+    const refreshHint =
+      `Refresh it: open portal.onehome.com (signed-in), grab a new bearer from ` +
+      `devtools Network tab, and update ONEHOME_TOKEN — or paste a fresh magic-link ` +
+      `URL into ONEHOME_MAGIC_LINK — or call the \`onehome_set_auth\` tool with the ` +
+      `new link / bearer to refresh in-session without a restart.`;
     super(
       `OneHome bearer token expired ${ageSec}s ago at ${new Date(expiredAt).toISOString()}. ` +
-        `Refresh it: open portal.onehome.com (signed-in), grab a new bearer from ` +
-        `devtools Network tab, and update ONEHOME_TOKEN — or paste a fresh magic-link ` +
-        `URL into ONEHOME_MAGIC_LINK — or call the \`onehome_set_auth\` tool with the ` +
-        `new link / bearer to refresh in-session without a restart.`
+        refreshHint,
+      { hint: refreshHint }
     );
     this.name = 'TokenExpiredError';
     this.expiredAt = expiredAt;
@@ -175,11 +158,14 @@ export function parseAuthInput(input: string): ParsedAuthInput {
  *
  * `ONEHOME_MAGIC_LINK` always carries the email-token form, since
  * that's what agents email — always exchange.
+ *
+ * This is deliberately a shape-only probe (no payload decode): the
+ * caller routes 3-segment tokens straight to the bearer path and
+ * 1-segment blobs to the checkToken exchange. Expiry introspection on
+ * the JWT path goes through mcp-utils (`decodeJwtExpiresAtMs` above).
  */
 export function isJwtShape(token: string): boolean {
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-  return parts.every((p) => p.length > 0);
+  return /^[^.]+\.[^.]+\.[^.]+$/.test(token);
 }
 
 export interface CheckTokenResponse {

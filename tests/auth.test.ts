@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
+import { McpToolError } from '@chrischall/mcp-utils';
 import {
   CheckTokenError,
   CheckTokenTimeoutError,
+  decodeJwtExpiresAtMs,
   exchangeEmailToken,
   extractTokenFromMagicLink,
+  isJwtShape,
   parseAuthInput,
-  parseJwt,
   TokenExpiredError,
 } from '../src/auth.js';
 
@@ -29,24 +31,35 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc(payload)}.signature`;
 }
 
-describe('parseJwt', () => {
-  it('parses a JWT with exp into a unix-ms timestamp', () => {
+describe('decodeJwtExpiresAtMs', () => {
+  it('decodes a JWT exp claim into a unix-ms timestamp', () => {
     const token = makeJwt({ sub: 'u1', exp: 1900000000 });
-    const parsed = parseJwt(token);
-    expect(parsed?.payload.sub).toBe('u1');
-    expect(parsed?.expiresAt).toBe(1900000000 * 1000);
+    expect(decodeJwtExpiresAtMs(token)).toBe(1900000000 * 1000);
   });
 
-  it('returns null when input has the wrong shape', () => {
-    expect(parseJwt('not-a-jwt')).toBeNull();
-    expect(parseJwt('a.b')).toBeNull();
+  it('returns null when input is not a decodable JWT', () => {
+    expect(decodeJwtExpiresAtMs('not-a-jwt')).toBeNull();
+    expect(decodeJwtExpiresAtMs('eyJsingle-segment-blob')).toBeNull();
   });
 
-  it('still returns parsed payload when exp is absent', () => {
-    const token = makeJwt({ sub: 'u1' });
-    const parsed = parseJwt(token);
-    expect(parsed?.expiresAt).toBeNull();
-    expect(parsed?.payload.sub).toBe('u1');
+  it('returns null when exp is absent or non-numeric', () => {
+    expect(decodeJwtExpiresAtMs(makeJwt({ sub: 'u1' }))).toBeNull();
+    expect(decodeJwtExpiresAtMs(makeJwt({ exp: 'soon' }))).toBeNull();
+  });
+});
+
+describe('isJwtShape', () => {
+  it('accepts a 3-segment token', () => {
+    expect(isJwtShape(makeJwt({ sub: 'u1' }))).toBe(true);
+    expect(isJwtShape('a.b.c')).toBe(true);
+  });
+
+  it('rejects single-segment email-tokens and other shapes', () => {
+    expect(isJwtShape('eyJsingle-segment-blob')).toBe(false);
+    expect(isJwtShape('a.b')).toBe(false);
+    expect(isJwtShape('a.b.c.d')).toBe(false);
+    expect(isJwtShape('a..c')).toBe(false);
+    expect(isJwtShape('')).toBe(false);
   });
 });
 
@@ -137,6 +150,12 @@ describe('TokenExpiredError', () => {
   it('mentions the onehome_set_auth tool as an in-session refresh path', () => {
     const err = new TokenExpiredError(Date.now() - 1000);
     expect(err.message).toContain('onehome_set_auth');
+  });
+
+  it('extends McpToolError and carries the refresh hint', () => {
+    const err = new TokenExpiredError(Date.now() - 1000);
+    expect(err).toBeInstanceOf(McpToolError);
+    expect(err.hint).toContain('onehome_set_auth');
   });
 });
 

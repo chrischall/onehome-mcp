@@ -27,7 +27,7 @@ import {
   type FetchproxyServerOpts,
   type FetchproxyTransport as FetchproxyTransportAdapter,
 } from '@chrischall/mcp-utils/fetchproxy';
-import { parseJwt, TokenExpiredError } from './auth.js';
+import { decodeJwtExpiresAtMs, TokenExpiredError } from './auth.js';
 import type {
   BridgeStatus,
   GraphQLRequest,
@@ -394,8 +394,7 @@ export class FetchproxyTransport implements OneHomeTransport {
 
   private setToken(token: string): void {
     this.token = token;
-    const parsed = parseJwt(token);
-    this.tokenExpiresAt = parsed?.expiresAt ?? null;
+    this.tokenExpiresAt = decodeJwtExpiresAtMs(token);
   }
 
   private recordSuccess(): void {
