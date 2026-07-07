@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.5](https://github.com/chrischall/onehome-mcp/compare/v0.12.4...v0.12.5) (2026-07-07)
+
+
+### Bug Fixes
+
+* bump @chrischall/mcp-utils to ^0.12.0 ([#100](https://github.com/chrischall/onehome-mcp/issues/100)) ([4aa9d04](https://github.com/chrischall/onehome-mcp/commit/4aa9d04cd14bf7284353a7c90d51a128070534ca))
+
+
+### Refactor
+
+* adopt mcp-utils JWT helpers ([#95](https://github.com/chrischall/onehome-mcp/issues/95)) ([e745ae8](https://github.com/chrischall/onehome-mcp/commit/e745ae82b022bde61618ac026540e64da88a3b49))
+
 ## [0.12.4](https://github.com/chrischall/onehome-mcp/compare/v0.12.3...v0.12.4) (2026-06-15)
 
 
