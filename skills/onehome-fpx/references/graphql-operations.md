@@ -1,9 +1,10 @@
 # OneHome GraphQL + REST operations for fpx
 
 Ready-to-run bodies for `fpx post-json 'https://services.onehome.com/graphql' @body.json -p onehome -H "Authorization: $TOKEN" -H 'Origin: https://portal.onehome.com' -H 'Referer: https://portal.onehome.com/'`.
-Every query string and variable shape below is copied verbatim from
-`src/queries.ts` in this repo (the same documents `onehome-mcp`'s tools
-send) — nothing here is guessed. Get `$TOKEN` first (see `../SKILL.md`).
+Every query string and variable shape below is drawn from `src/queries.ts`
+in this repo (the same documents `onehome-mcp`'s tools send) — some are
+copied verbatim, others are trimmed field subsets for readability here,
+but none are guessed. Get `$TOKEN` first (see `../SKILL.md`).
 
 Pattern: write the GraphQL text to a file (a heredoc avoids shell-quoting
 the doc), assemble the JSON body with `jq -n --rawfile`, then POST:

@@ -118,7 +118,9 @@ you know the session is an agent's.
 ## Notes
 
 - The captured/exchanged bearer is a JWT — decode its `exp` if you need to
-  know when to refresh (`jq -R 'split(".")[1] | @base64d | fromjson | .exp'`
-  on the token, ignoring padding errors).
+  know when to refresh. JWTs are base64url, not base64 (they use `-`/`_`
+  instead of `+`/`/`), so translate the alphabet before `@base64d`:
+  `jq -R 'split(".")[1] | gsub("-";"+") | gsub("_";"/") | @base64d | fromjson | .exp'`
+  on the token, ignoring padding errors.
 - `fpx health -p onehome` shows bridge connection state when a call fails.
 - This project is developed and maintained by AI (Claude).
