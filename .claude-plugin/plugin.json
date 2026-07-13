@@ -1,7 +1,7 @@
 {
   "name": "onehome-mcp",
   "displayName": "OneHome",
-  "version": "0.12.5",
+  "version": "0.13.0",
   "description": "OneHome (CoreLogic) real-estate access for Claude — your agent-shared portal listings, property details, photos, schools, saved searches",
   "author": {
     "name": "Chris Hall",

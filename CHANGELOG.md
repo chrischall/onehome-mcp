@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.13.0](https://github.com/chrischall/onehome-mcp/compare/v0.12.5...v0.13.0) (2026-07-13)
+
+
+### Features
+
+* **skill:** add onehome fpx access skill ([#101](https://github.com/chrischall/onehome-mcp/issues/101)) ([02a6a2e](https://github.com/chrischall/onehome-mcp/commit/02a6a2eeba2acd1dbbd11a9780d4642b6173689a))
+
+
+### Refactor
+
+* **skill:** move root SKILL.md into skills/, point plugin.json at ./skills/ ([#104](https://github.com/chrischall/onehome-mcp/issues/104)) ([c69474c](https://github.com/chrischall/onehome-mcp/commit/c69474cab1552a0af3a851f45f3a3957dd0fd63b))
+
+
+### Documentation
+
+* **skill:** fix JWT base64url decode and soften verbatim-copy claim ([#106](https://github.com/chrischall/onehome-mcp/issues/106)) ([2b00ecd](https://github.com/chrischall/onehome-mcp/commit/2b00ecd20a236692aadf63c769fe1ef57d0a9cf0)), closes [#102](https://github.com/chrischall/onehome-mcp/issues/102) [#105](https://github.com/chrischall/onehome-mcp/issues/105)
+
 ## [0.12.5](https://github.com/chrischall/onehome-mcp/compare/v0.12.4...v0.12.5) (2026-07-07)
 
 
