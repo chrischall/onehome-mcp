@@ -29,7 +29,6 @@
     ".claude-plugin",
     ".mcp.json",
     "server.json",
-    "SKILL.md",
     "skills"
   ],
   "scripts": {
