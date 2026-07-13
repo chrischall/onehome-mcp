@@ -1,6 +1,6 @@
 {
   "name": "onehome-mcp",
-  "version": "0.12.5",
+  "version": "0.13.0",
   "mcpName": "io.github.chrischall/onehome-mcp",
   "description": "OneHome (CoreLogic) MCP server for Claude — developed and maintained by AI (Claude Code)",
   "author": "Claude Code (AI) <https://www.anthropic.com/claude>",
