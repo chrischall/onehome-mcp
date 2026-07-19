@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/chrischall/onehome-mcp/compare/v0.13.0...v0.13.1) (2026-07-19)
+
+
+### Documentation
+
+* replace duplicated fleet policy with a pointer ([#110](https://github.com/chrischall/onehome-mcp/issues/110)) ([ee25e14](https://github.com/chrischall/onehome-mcp/commit/ee25e143b10c098d754126cd41b95100ed3580c8))
+
 ## [0.13.0](https://github.com/chrischall/onehome-mcp/compare/v0.12.5...v0.13.0) (2026-07-13)
 
 
