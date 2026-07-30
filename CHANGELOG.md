@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.2](https://github.com/chrischall/onehome-mcp/compare/v0.13.1...v0.13.2) (2026-07-30)
+
+
+### Bug Fixes
+
+* **deps:** bump @fetchproxy/* to 1.7.0 and @chrischall/mcp-utils to 0.14.0 ([#120](https://github.com/chrischall/onehome-mcp/issues/120)) ([b29ab27](https://github.com/chrischall/onehome-mcp/commit/b29ab2743830a445025f4fa17b2aec689fa8ab66))
+
 ## [0.13.1](https://github.com/chrischall/onehome-mcp/compare/v0.13.0...v0.13.1) (2026-07-19)
 
 
