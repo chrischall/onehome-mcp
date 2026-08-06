@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.3](https://github.com/chrischall/onehome-mcp/compare/v0.13.2...v0.13.3) (2026-08-06)
+
+
+### Bug Fixes
+
+* **deps:** move to @fetchproxy/server 2.0.0 for the v3 handshake ([#127](https://github.com/chrischall/onehome-mcp/issues/127)) ([8f2a67d](https://github.com/chrischall/onehome-mcp/commit/8f2a67dc7e1a4ff8b577e93943d8ee90d455b7ef))
+
 ## [0.13.2](https://github.com/chrischall/onehome-mcp/compare/v0.13.1...v0.13.2) (2026-07-30)
 
 
