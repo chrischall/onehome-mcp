@@ -42,8 +42,6 @@ egress:
   allow:
     # Only hosts the SERVER process actually fetches. Hosts that appear
     # solely in a URL this server BUILDS and returns are excluded.
-    - onehome.com
-    - portal.onehome.com
     - services.onehome.com
     #
     # NOTE — this server also reaches at least one host determined at
