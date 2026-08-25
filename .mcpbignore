@@ -71,3 +71,4 @@ scripts/
 # Don't recursively pack the bundle into itself
 *.mcpb
 *.skill
+mint.yaml
