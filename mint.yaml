@@ -1,0 +1,53 @@
+version: 1
+name: OneHome
+slug: onehome
+summary: >-
+  OneHome (CoreLogic) real-estate access for Claude — search listings, fetch
+  property details, photos, schools, and run mortgage / affordability math
+  against your agent-shared OneHome portal
+#
+# Hosting note (a comment, not user-facing summary text): this is a
+# BROWSER-BRIDGE MCP — it reaches its site through the user's signed-in
+# tab via the fetchproxy bridge. A bridged registration also needs runtime
+# `fly-shared`, `bridge: true` and a `bridgePortEnv`, which are registration
+# fields this manifest has no schema for (set them over the control API).
+# `state.dataDir` below is required for `bridge`.
+env:
+  - name: ONEHOME_TOKEN
+    secret: true
+    required: false
+    help: >-
+      Bearer token for services.onehome.com. Paste the raw JWT (Authorization
+      header value, minus the 'Bearer ' prefix) from your signed-in
+      portal.onehome.com session.
+  - name: ONEHOME_MAGIC_LINK
+    required: false
+    help: >-
+      Magic-link URL with ?token=... from your real-estate agent. The MCP
+      extracts the token query param and uses it directly as the bearer.
+  - name: ONEHOME_WS_PORT
+    required: false
+    help: >-
+      Override the fetchproxy WebSocket port (default 37149). Only used when
+      ONEHOME_TOKEN / ONEHOME_MAGIC_LINK are unset and the MCP boots in
+      capture-from-tab mode.
+state:
+  dataDir: true
+  reason: >-
+    The fetchproxy identity lives at $HOME/.fetchproxy/identity/<name>.json
+    and the pair code derives from it. Without a persistent $HOME every cold
+    start mints a fresh identity and re-prompts pairing in the browser; the
+    API refuses bridge without it.
+egress:
+  allow:
+    # Only hosts the SERVER process actually fetches. Hosts that appear
+    # solely in a URL this server BUILDS and returns are excluded.
+    - onehome.com
+    - portal.onehome.com
+    - services.onehome.com
+    #
+    # NOTE — this server also reaches at least one host determined at
+    # RUNTIME, which cannot appear as a literal here:
+    #   - a media/CDN host supplied at runtime
+    # Confirm the concrete host(s) against a live run and add them, or
+    # the isolated tier will block the call.
