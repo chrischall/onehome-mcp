@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.4](https://github.com/chrischall/onehome-mcp/compare/v0.13.3...v0.13.4) (2026-08-26)
+
+
+### Bug Fixes
+
+* narrow onehome mint.yaml egress to the host it fetches ([#138](https://github.com/chrischall/onehome-mcp/issues/138)) ([5522dc5](https://github.com/chrischall/onehome-mcp/commit/5522dc5b5494210cbf5160d6bb594f29823ccd3f)), closes [#137](https://github.com/chrischall/onehome-mcp/issues/137)
+
 ## [0.13.3](https://github.com/chrischall/onehome-mcp/compare/v0.13.2...v0.13.3) (2026-08-06)
 
 
