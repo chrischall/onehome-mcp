@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/chrischall/onehome-mcp/compare/v0.13.4...v0.14.0) (2026-08-29)
+
+
+### Features
+
+* **deps:** take @fetchproxy/server 2.2.0 so the concentrator can bind its sandbox address ([#142](https://github.com/chrischall/onehome-mcp/issues/142)) ([dc1a1ea](https://github.com/chrischall/onehome-mcp/commit/dc1a1ead9ce9ec79d8db82cbc16ac57f4924992d))
+
 ## [0.13.4](https://github.com/chrischall/onehome-mcp/compare/v0.13.3...v0.13.4) (2026-08-26)
 
 
