@@ -31,6 +31,12 @@ env:
       Override the fetchproxy WebSocket port (default 37149). Only used when
       ONEHOME_TOKEN / ONEHOME_MAGIC_LINK are unset and the MCP boots in
       capture-from-tab mode.
+  - name: ONEHOME_COMMUNITIES_FILE
+    required: false
+    help: >-
+      Absolute path to a JSON array of community names, replacing the built-in
+      vocabulary (which is specific to the Lake Lure / mountain-NC market).
+      Set this to use this server in any other market.
 state:
   dataDir: true
   reason: >-
