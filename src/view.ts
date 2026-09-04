@@ -27,7 +27,22 @@ const NOTE =
   'No field projection: this server has no verified record of which OneHome fields matter, and inventing ' +
   'one would risk dropping a field a caller needs.';
 
-/** The `view` parameter every read tool in this server takes. */
+/**
+ * The `view` parameter, for the tools that take one.
+ *
+ * NOT every read tool — this is a deliberate PARTIAL rollout. Four tools
+ * declare it (`onehome_get_by_address`, `onehome_compare_properties`,
+ * `onehome_graphql`, `onehome_get_user`); the other fifteen call
+ * `minifiedResult` directly and advertise no rung at all. `CLAUDE.md` carries
+ * the list and the reasoning, including why `onehome_get_property_photos` must
+ * never take one — its PRODUCT is the image URLs, so stripping empties the
+ * response rather than shrinking it.
+ *
+ * This docblock used to claim "every read tool", which was never true and
+ * contradicted the file that had it right. A comment asserting broader
+ * coverage than exists is worse than none: it is exactly what someone checks
+ * INSTEAD of counting.
+ */
 export const viewArg = (): ReturnType<typeof viewParam> => viewParam(OH_VIEWS, { note: NOTE });
 
 /**
