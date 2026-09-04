@@ -7,7 +7,7 @@ import {
   BRIDGE_CONCURRENCY,
 } from '@chrischall/mcp-utils/fetchproxy';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import {
   buildAddressQuery,
   resolveByAddressOnce,
@@ -144,7 +144,7 @@ export function registerResolveAddressesTools(
         }
       );
       const resolved = rows.filter((r) => r.resolved).length;
-      return textResult({
+      return minifiedResult({
         ...(groupId ? { group_id: groupId } : {}),
         count: rows.length,
         resolved,

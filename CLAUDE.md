@@ -73,7 +73,7 @@ src/
   address-format.ts     # shared street/address-string joins used by
                         #   format + by-address + resolve-addresses.
   url.ts                # listing-id (OSK) extraction from URL/path/raw.
-  mcp.ts                # textResult() wrapper.
+  mcp.ts                # minifiedResult() wrapper (re-exported from @chrischall/mcp-utils).
   tools/
     user.ts             # onehome_get_user, onehome_get_groups,
                         #   onehome_get_session_context. Both `user` /
@@ -158,7 +158,8 @@ ONEHOME_WS_PORT=37149   # override the fetchproxy WebSocket port (capture mode o
 ## Conventions
 
 - All tools prefixed `onehome_*`.
-- Tool return shape: `textResult(data)` from `src/mcp.ts` → `{ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }`. Don't hand-roll the wrapper.
+- Tool return shape: `minifiedResult(data)` from `src/mcp.ts` → `{ content: [{ type: 'text', text: JSON.stringify(data) }] }`. Don't hand-roll the wrapper. It is MINIFIED, not pretty-printed: indentation is roughly a fifth of a large response and nothing downstream reads it. Whitespace INSIDE a value is untouched — `JSON.stringify` drops only the indent and the runs after `:` and `,` — so a listing's multi-paragraph description comes back byte-identical.
+- A READ tool that hands back a payload answers through `viewResponse(view, data)` (`src/view.ts`) rather than `minifiedResult` directly, and declares `view: viewArg()` in its input schema. Calling `minifiedResult` from a tool that advertises `view` makes the parameter a no-op — a schema promising a response shape the handler never honours. Destructure `view` off the args before building any upstream request: it is a response-shape argument and OneHome has never heard of it.
 - Tool annotations: every tool sets `title`, `readOnlyHint: true`, `idempotentHint: true`, and `openWorldHint`. The last is `true` for GraphQL-bound tools and `false` for `onehome_calculate_mortgage` / `onehome_calculate_affordability` (pure local computation). `onehome_graphql` sets `idempotentHint: false` because the document may be a mutation.
 - `OneHomeClient.graphql<T>(req)` unwraps `data` and throws on `errors`. For raw envelope access (`onehome_graphql`), use `OneHomeClient.graphqlRaw(req)`.
 - Path-only inputs in queries: tool authors hand `OneHomeClient.graphql` a `{operationName, query, variables}` request — never an inline URL. URLs are built once in the transports.

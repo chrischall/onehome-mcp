@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSummary, registerCompareTools } from '../../src/tools/compare.js';
 import type { FormattedListing } from '../../src/format.js';
-import { ok, makeClient, createTestHarness } from '../helpers.js';
+import { ok, makeClient, createTestHarness, FakeTransport } from '../helpers.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 const A: FormattedListing = {
@@ -182,6 +182,66 @@ describe('onehome_compare_properties summary opt-in (issue #18)', () => {
       expect(acresRow.values[1]).toBeNull();
     } finally {
       await harness.close();
+    }
+  });
+});
+
+/**
+ * `onehome_compare_properties` builds its rows from `formatListing`, a
+ * hand-written projection with no media field in it, so compact and full must
+ * agree BYTE FOR BYTE. That is the assertion worth having: a `view` that
+ * quietly changed a compared listing would be far worse than one that did
+ * nothing, and this is what would catch it.
+ */
+describe('onehome_compare_properties — view', () => {
+  const listings = (transport: FakeTransport): void => {
+    transport.setStatus({ sessionContext: { groupId: 'G' } });
+    transport.on('ListingById', (vars) =>
+      ok({ listingDetail: vars.listingId === 'A' ? RAW_A : RAW_B })
+    );
+  };
+
+  async function callCompare(args: Record<string, unknown> = {}): Promise<{
+    text: string;
+    transport: FakeTransport;
+  }> {
+    const { client, transport } = makeClient();
+    listings(transport);
+    const harness = await createTestHarness((server) =>
+      registerCompareTools(server, client)
+    );
+    try {
+      const result = (await harness.callTool('onehome_compare_properties', {
+        targets: [{ listing_id: 'A' }, { listing_id: 'B' }],
+        ...args,
+      })) as CallToolResult;
+      const first = result.content[0]!;
+      if (first.type !== 'text') throw new Error('expected text');
+      return { text: first.text, transport };
+    } finally {
+      await harness.close();
+    }
+  }
+
+  it('returns identical bytes on compact and full', async () => {
+    const compact = await callCompare();
+    const full = await callCompare({ view: 'full' });
+    expect(compact.text).toBe(full.text);
+  });
+
+  it('emits a single line — no pretty-printing on either rung', async () => {
+    expect((await callCompare()).text.includes('\n')).toBe(false);
+    expect((await callCompare({ view: 'full' })).text.includes('\n')).toBe(false);
+  });
+
+  // `view` is a RESPONSE-shape argument; OneHome has never heard of it. Two
+  // sibling repos shipped a handler that forwarded its whole args object into
+  // a query string and sent `view=compact` to the live API.
+  it('never forwards `view` into the GraphQL variables', async () => {
+    const { transport } = await callCompare({ view: 'full' });
+    expect(transport.calls.length).toBeGreaterThan(0);
+    for (const call of transport.calls) {
+      expect(JSON.stringify(call.variables ?? {})).not.toContain('view');
     }
   });
 });

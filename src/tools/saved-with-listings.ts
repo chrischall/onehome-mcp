@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import {
   buildGetSavedListings,
   buildGetSavedSearchBySearchId,
@@ -108,7 +108,7 @@ export function registerSavedWithListingsTools(
 
       // Step 2: short-circuit when the saved search has no listings.
       if (listingIds.length === 0) {
-        return textResult({
+        return minifiedResult({
           saved_search: formattedSavedSearch,
           group_id: groupId,
           page_info: {
@@ -136,7 +136,7 @@ export function registerSavedWithListingsTools(
       const listings = data.listingsBySavedSearchId?.listings ?? [];
       // FRAGMENT_LISTING_CARD has no PublicRemarks; no description ever surfaces here.
       const formattedListings = listings.map((l) => formatListing(l.id ?? '', l));
-      return textResult({
+      return minifiedResult({
         saved_search: formattedSavedSearch,
         group_id: groupId,
         page_info: data.listingsBySavedSearchId?.pageInfo ?? null,

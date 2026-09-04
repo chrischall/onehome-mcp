@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { calculateMortgage } from '@chrischall/realty-core';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 
 /**
  * Local-only mortgage / PITI calculator. No network — fully
@@ -52,7 +52,7 @@ export function registerMortgageTools(server: McpServer): void {
       // Map the canonical (zillow-union) breakdown back to onehome's
       // leaner shape: `monthly_total_piti` / `total_interest_over_term`
       // and `ltv` as a 0..1 ratio (canonical reports `ltv_percent` 0..100).
-      return textResult({
+      return minifiedResult({
         home_price: m.home_price,
         down_payment: m.down_payment,
         loan_amount: m.loan_amount,

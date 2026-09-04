@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 
 /**
  * Compact fingerprint of an auth token so the tool's response confirms
@@ -48,7 +48,7 @@ export function registerAuthTools(
     },
     async ({ input }) => {
       const { sessionId, status, bearer } = await client.setAuthFromInput(input);
-      return textResult({
+      return minifiedResult({
         session_id: sessionId,
         active_session_id: client.getActiveSessionId(),
         auth_mode: status.authMode,
@@ -86,7 +86,7 @@ export function registerAuthTools(
     },
     async ({ session_id }) => {
       client.setActiveSession(session_id);
-      return textResult({
+      return minifiedResult({
         active_session_id: client.getActiveSessionId(),
         sessions: client.listSessions().map((s) => ({
           session_id: s.sessionId,

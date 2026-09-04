@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import { buildGetSavedSearchBySearchId } from '../queries.js';
 
 export interface UserQueryEntry {
@@ -114,7 +114,7 @@ export function registerSavedTools(
             'accessible with the current session token.'
         );
       }
-      return textResult(
+      return minifiedResult(
         formatSavedSearch(data.savedSearch, {
           include_listing_ids: i.include_listing_ids ?? true,
         })

@@ -711,3 +711,50 @@ describe('onehome_get_by_address — search-fallback rung', () => {
     expect(result.matched_outside_saved_area).toBe(true);
   });
 });
+
+/**
+ * `onehome_get_by_address` hands its WHOLE input object on to
+ * `resolveByAddressOnce`, which builds the address query. That is the exact
+ * shape in which two sibling repos leaked `view=compact` to a live API, so
+ * `view` is destructured off the args before anything downstream sees them —
+ * and this test is what keeps it that way.
+ */
+describe('onehome_get_by_address — view', () => {
+  const suggestion = () =>
+    ok({
+      listingSuggestionsSearch: [
+        { id: 'L-1', streetAddress: '126 Sleeping Bear Ln', city: 'Lake Lure' },
+      ],
+    });
+
+  it('never lets `view` reach the address query sent upstream', async () => {
+    const transport = new FakeTransport().on('ListingSuggestionsSearch', suggestion);
+    await callBy(transport, {
+      address: '126 Sleeping Bear Ln',
+      city: 'Lake Lure',
+      view: 'full',
+    });
+    expect(transport.calls).toHaveLength(1);
+    const sent = JSON.stringify(transport.calls[0]!.variables ?? {});
+    expect(sent).not.toContain('view');
+    expect(sent).not.toContain('full');
+  });
+
+  // The resolved record names its own fields and none of them is a picture, so
+  // compact and full must agree. Pinned because a `view` that quietly changed
+  // a resolved listing id would be far worse than one that did nothing.
+  it('resolves identically on compact and full', async () => {
+    const compact = await callBy(
+      new FakeTransport().on('ListingSuggestionsSearch', suggestion),
+      { address: '126 Sleeping Bear Ln' }
+    );
+    await harness?.close();
+    harness = undefined;
+    const full = await callBy(
+      new FakeTransport().on('ListingSuggestionsSearch', suggestion),
+      { address: '126 Sleeping Bear Ln', view: 'full' }
+    );
+    expect(compact).toEqual(full);
+    expect(compact.listing_id).toBe('L-1');
+  });
+});

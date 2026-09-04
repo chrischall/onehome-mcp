@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import { buildMediaListingById } from '../queries.js';
 import { extractListingId } from '../url.js';
 import type { RawMediaItem } from '../format.js';
@@ -92,7 +92,7 @@ export function registerPhotosTools(
         .map(formatPhoto)
         .filter((p): p is FormattedPhoto => p !== null)
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      return textResult({
+      return minifiedResult({
         listing_id: id,
         count: photos.length,
         photos,
