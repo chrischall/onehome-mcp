@@ -34,8 +34,8 @@ Run `onehome_healthcheck` first to confirm auth is wired up — it returns the m
 2. **Search inside the group.** `onehome_search_properties { group_id, [saved_search_id] }`. Pass a `saved_search_id` from `onehome_get_saved_search` to apply a saved filter; leave it off for the group default. `onehome_get_saved_search_with_listings` returns the saved search and its inflated listings in one call.
 3. **Inflate a listing.** `onehome_get_property { group_id, listing_id }` for the full record. The listing id is an OSK like `EYxOzZSAbCdEf12345`; you can pass a portal URL instead and the MCP will extract it.
 4. **Photos / schools / walkability** are separate calls. Use the lat/lng from `onehome_get_property` to drive `onehome_get_schools` and `onehome_get_walk_score`.
-5. **Compare** `onehome_compare_properties { group_id, targets: [...] }` — 2 to 8 listings, concurrent fetch, per-row error capture. Don't fan out manual `get_property` calls when comparing.
-6. **Escape hatch.** `onehome_graphql` lets you send a raw document with variables when you need a field the structured tools don't expose. Common operation names: `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools / walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score` instead.)
+5. **Compare** `onehome_compare_properties { group_id, targets: [...], view? }` — 2 to 8 listings, concurrent fetch, per-row error capture. Don't fan out manual `get_property` calls when comparing.
+6. **Escape hatch.** `onehome_graphql { operation_name, query, variables?, view? }` lets you send a raw document when you need a field the structured tools don't expose. Common operation names: `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools / walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score` instead.)
 
 ## Free-text search
 
@@ -44,6 +44,48 @@ Run `onehome_healthcheck` first to confirm auth is wired up — it returns the m
 ## Local computation
 
 `onehome_calculate_mortgage` and `onehome_calculate_affordability` are pure local math — no network, no token needed. Use them when the user asks "what would my payment be on this place" or "what can I afford"; identical math to the other realty MCPs.
+
+## Response shape (`view`)
+
+Four tools take `view: "compact" | "full"` — `onehome_get_by_address`,
+`onehome_compare_properties`, `onehome_get_user` and `onehome_graphql` — and
+**`compact` is the default**. You get the slim shape without asking for it;
+an efficiency a caller has to request is one that is usually not requested.
+
+**What compact does here is strip image and avatar URLs, and nothing else.**
+There is no field projection, and none is claimed: this server hands OneHome's
+payload back close to verbatim and holds no verified record of which of its
+fields matter, so nothing here could honestly name a keep-list. Stripping media
+is *subtractive* — it names what to remove, never what to keep — so it cannot
+lose a field nobody anticipated. Every non-media field, at every depth,
+survives compact untouched.
+
+**The surprise is `onehome_graphql`.** Compact keeps every envelope key
+(`data`, `errors`, `status`, `url`), but the strip reaches *inside* `data` —
+and `MediaListingById`, one of the operation names this skill recommends, is
+all media. OneHome nests its variants under an `Image` key, so at the default
+rung each photo comes back as `{ Order, LongDescription }` with `Thumbnail`,
+`Medium` and `Large` all gone: the call succeeds and returns nothing you asked
+for. Pass `view: "full"` for any media query — and for any call you are making
+*because* a payload was not what you expected, so a missing field is never this
+server's doing.
+
+`view: "full"` returns what the tool built with nothing removed. There is
+deliberately **no `raw` rung**, for two different reasons: on `onehome_graphql`
+`full` already *is* the unprojected upstream envelope, so a third value would
+silently alias the second; and the other three assemble their record from a
+query result plus derived fields, so there is no single upstream payload left
+to hand back.
+
+**The other seventeen tools take no `view` at all.** That is scope — a partial
+rollout, not an oversight — but for two of them it is also correct on the
+merits:
+
+- `onehome_get_property_photos` exists to return exactly the URLs compact
+  strips. Its product *is* the image; stripping there would not shrink the
+  response, it would empty it. Never media-strip a tool whose name is the test.
+- `onehome_calculate_mortgage` and `onehome_calculate_affordability` are local
+  math returning a handful of numbers — already narrower than any projection.
 
 ## Common pitfalls
 
