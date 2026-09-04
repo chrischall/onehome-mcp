@@ -107,7 +107,12 @@ export function registerUserTools(
         const u = data.user;
         if (!u) return viewResponse(view, null);
         const groups = (u.groups ?? []).map(formatGroup);
-        return minifiedResult({
+        // BOTH exits answer through `viewResponse`. This one and the
+        // session-context fallback below called `minifiedResult` directly,
+        // which left `onehome_get_user`'s advertised `view` parameter a no-op
+        // on every path a caller can actually reach — a schema promising a
+        // response shape the handler never honoured.
+        return viewResponse(view, {
           source: 'graphql',
           user_id: u.id,
           first_name: u.firstName,
@@ -123,7 +128,7 @@ export function registerUserTools(
       } catch (err) {
         if (!isAccessDenied(err)) throw err;
         const ctx = client.bridgeStatus().sessionContext;
-        return minifiedResult({
+        return viewResponse(view, {
           source: 'session_context',
           note: 'consumer-share session — `user` GraphQL is agent-only; returning data from the checkToken response instead.',
           email: ctx.email,
