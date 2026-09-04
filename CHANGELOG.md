@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.15.0](https://github.com/chrischall/onehome-mcp/compare/v0.14.0...v0.15.0) (2026-09-04)
+
+
+### Features
+
+* **tools:** compact by default — strip media URLs, and minify every response ([#158](https://github.com/chrischall/onehome-mcp/issues/158)) ([54b6dd1](https://github.com/chrischall/onehome-mcp/commit/54b6dd1f45331c8bad4a462fb8ae270d06aaf726))
+
+
+### Bug Fixes
+
+* **deps:** pick up @chrischall/mcp-utils 0.23.2 ([#161](https://github.com/chrischall/onehome-mcp/issues/161)) ([eb06986](https://github.com/chrischall/onehome-mcp/commit/eb069864ab0bb1cdc8ca9cd69d42761d067f249a))
+
+
+### Documentation
+
+* **mint:** declare ONEHOME_COMMUNITIES_FILE in mint.yaml ([#149](https://github.com/chrischall/onehome-mcp/issues/149)) ([3eea5f6](https://github.com/chrischall/onehome-mcp/commit/3eea5f6751ff905e6cfa488373bdd78d07955383))
+* **tools:** say what compact does to onehome_graphql's envelope, and scope the view rule ([#160](https://github.com/chrischall/onehome-mcp/issues/160)) ([e1eb7c7](https://github.com/chrischall/onehome-mcp/commit/e1eb7c749e6a1770c11b9b2a84745d36a2aa3094))
+
 ## [0.14.0](https://github.com/chrischall/onehome-mcp/compare/v0.13.4...v0.14.0) (2026-08-29)
 
 
