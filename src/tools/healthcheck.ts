@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import { GraphQLResponseError } from '../client.js';
 import {
   buildGetOneHomeUser,
@@ -209,7 +209,7 @@ export function registerHealthcheckTools(
           secondsUntilExpiry,
         }),
       };
-      return textResult(result);
+      return minifiedResult(result);
     }
   );
 }

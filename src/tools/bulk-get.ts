@@ -7,7 +7,7 @@ import {
   BRIDGE_CONCURRENCY,
 } from '@chrischall/mcp-utils/fetchproxy';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import { fetchListingDetail } from './properties.js';
 import { formatListing, type FormattedListing } from '../format.js';
 
@@ -90,7 +90,7 @@ export function registerBulkGetTools(
           return row;
         }
       );
-      return textResult({
+      return minifiedResult({
         ...(groupId ? { group_id: groupId } : {}),
         count: rows.length,
         rows,

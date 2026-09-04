@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { calculateAffordability } from '@chrischall/realty-core';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 
 /**
  * Local-only affordability calculator. Solves for max home price under
@@ -37,6 +37,6 @@ export function registerAffordabilityTools(server: McpServer): void {
         back_end_dti: z.number().min(0).max(1).optional(),
       },
     },
-    async (i) => textResult(calculateAffordability(i))
+    async (i) => minifiedResult(calculateAffordability(i))
   );
 }

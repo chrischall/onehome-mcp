@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
+import { viewArg, viewResponse } from '../view.js';
 
 /**
  * Power-user escape hatch: send a raw GraphQL document with the
@@ -32,6 +33,7 @@ export function registerGraphqlTool(
         openWorldHint: true,
       },
       inputSchema: {
+        view: viewArg(),
         operation_name: z.string(),
         query: z.string(),
         variables: z.record(z.string(), z.unknown()).optional(),
@@ -43,7 +45,7 @@ export function registerGraphqlTool(
         query: i.query,
         variables: i.variables ?? {},
       });
-      return textResult(result);
+      return viewResponse((i as { view?: string }).view, result);
     }
   );
 }

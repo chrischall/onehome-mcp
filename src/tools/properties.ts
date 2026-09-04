@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import { buildListingById } from '../queries.js';
 import { extractListingId } from '../url.js';
 import { formatListing, type FormattedListing, type RawListingDetail } from '../format.js';
@@ -93,7 +93,7 @@ export function registerPropertyTools(
         url: i.url,
         saved_search_id: i.saved_search_id,
       });
-      return textResult(
+      return minifiedResult(
         formatListing(listingId, raw, { includeDescription: i.include_description })
       );
     }

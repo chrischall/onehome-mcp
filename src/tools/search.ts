@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 import {
   buildGetListings,
   buildGetSavedListings,
@@ -111,14 +111,14 @@ export function registerSearchTools(
 
       async function runSavedSearchPath(
         ssId: string
-      ): Promise<ReturnType<typeof textResult>> {
+      ): Promise<ReturnType<typeof minifiedResult>> {
         // 1. Fetch the saved search to get its listingIds (osks).
         const ssData = await client.graphql<{ savedSearch?: RawSavedSearch }>(
           buildGetSavedSearchBySearchId(ssId)
         );
         const listingIds = ssData.savedSearch?.listingIds ?? [];
         if (listingIds.length === 0) {
-          return textResult({
+          return minifiedResult({
             group_id: groupId,
             saved_search_id: ssId,
             saved_search_name: ssData.savedSearch?.name,
@@ -144,7 +144,7 @@ export function registerSearchTools(
           })
         );
         const listings = data.listingsBySavedSearchId?.listings ?? [];
-        return textResult({
+        return minifiedResult({
           group_id: groupId,
           saved_search_id: ssId,
           saved_search_name: ssData.savedSearch?.name,
@@ -196,7 +196,7 @@ export function registerSearchTools(
             'context (group + saved-search ids).'
         );
       }
-      return textResult({
+      return minifiedResult({
         group_id: groupId,
         page_info: data.listings?.pageInfo ?? null,
         count: listings.length,
@@ -233,7 +233,7 @@ export function registerSearchTools(
         })
       );
       const items = data.listingSuggestionsSearch ?? [];
-      return textResult({
+      return minifiedResult({
         query: i.query,
         count: items.length,
         suggestions: items.map(formatSuggestion),

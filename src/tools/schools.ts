@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
 
 /**
  * LocalLogic schools + walk-score live on REST endpoints under
@@ -104,7 +104,7 @@ export function registerSchoolsTools(
       const path = buildPath('schools', i);
       const result = await client.rest<SchoolsResponse>(path);
       if (!result.ok) {
-        return textResult({
+        return minifiedResult({
           lat: i.lat,
           lng: i.lng,
           ok: false,
@@ -120,7 +120,7 @@ export function registerSchoolsTools(
         });
       }
       const root = (result.data as SchoolsResponse)?.data ?? {};
-      return textResult({
+      return minifiedResult({
         lat: i.lat,
         lng: i.lng,
         ok: true,
@@ -152,7 +152,7 @@ export function registerSchoolsTools(
       const path = buildPath('scores', i);
       const result = await client.rest<ScoresResponse>(path);
       if (!result.ok) {
-        return textResult({
+        return minifiedResult({
           lat: i.lat,
           lng: i.lng,
           ok: false,
@@ -165,7 +165,7 @@ export function registerSchoolsTools(
         });
       }
       const root = (result.data as ScoresResponse)?.data ?? {};
-      return textResult({
+      return minifiedResult({
         lat: i.lat,
         lng: i.lng,
         ok: true,

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
+import { viewArg, viewResponse } from '../view.js';
 import { fetchListingDetail } from './properties.js';
 import { formatListing, type FormattedListing } from '../format.js';
 
@@ -77,6 +78,7 @@ export function registerCompareTools(
         openWorldHint: true,
       },
       inputSchema: {
+        view: viewArg(),
         group_id: z.string().optional(),
         targets: z
           .array(
@@ -137,7 +139,7 @@ export function registerCompareTools(
         rows,
       };
       if (i.include_summary === true) body.summary = buildSummary(rows);
-      return textResult(body);
+      return viewResponse((i as { view?: string }).view, body);
     }
   );
 }

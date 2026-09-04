@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OneHomeClient } from '../client.js';
-import { textResult } from '../mcp.js';
+import { minifiedResult } from '../mcp.js';
+import { viewArg, viewResponse } from '../view.js';
 import { GraphQLResponseError } from '../client.js';
 import { buildGetOneHomeUser } from '../queries.js';
 
@@ -97,15 +98,16 @@ export function registerUserTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {},
+      inputSchema: {
+        view: viewArg(),},
     },
-    async () => {
+    async ({ view }) => {
       try {
         const data = await client.graphql<UserResponse>(buildGetOneHomeUser());
         const u = data.user;
-        if (!u) return textResult(null);
+        if (!u) return viewResponse(view, null);
         const groups = (u.groups ?? []).map(formatGroup);
-        return textResult({
+        return minifiedResult({
           source: 'graphql',
           user_id: u.id,
           first_name: u.firstName,
@@ -121,7 +123,7 @@ export function registerUserTools(
       } catch (err) {
         if (!isAccessDenied(err)) throw err;
         const ctx = client.bridgeStatus().sessionContext;
-        return textResult({
+        return minifiedResult({
           source: 'session_context',
           note: 'consumer-share session — `user` GraphQL is agent-only; returning data from the checkToken response instead.',
           email: ctx.email,
@@ -153,7 +155,7 @@ export function registerUserTools(
       try {
         const data = await client.graphql<UserResponse>(buildGetOneHomeUser());
         const groups = (data.user?.groups ?? []).map(formatGroup);
-        return textResult({
+        return minifiedResult({
           source: 'graphql',
           count: groups.length,
           groups,
@@ -162,14 +164,14 @@ export function registerUserTools(
         if (!isAccessDenied(err)) throw err;
         const ctx = client.bridgeStatus().sessionContext;
         if (!ctx.groupId) {
-          return textResult({
+          return minifiedResult({
             source: 'session_context',
             count: 0,
             groups: [],
             note: 'consumer-share session — no groups in session context.',
           });
         }
-        return textResult({
+        return minifiedResult({
           source: 'session_context',
           count: 1,
           groups: [
@@ -214,7 +216,7 @@ export function registerUserTools(
             : null,
         session_context: s.status.sessionContext,
       }));
-      return textResult({
+      return minifiedResult({
         active_session_id: client.getActiveSessionId(),
         sessions,
       });
