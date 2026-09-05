@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.1](https://github.com/chrischall/onehome-mcp/compare/v0.15.0...v0.15.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **tools:** a literal NUL made this file invisible to grep ([#164](https://github.com/chrischall/onehome-mcp/issues/164)) ([9843035](https://github.com/chrischall/onehome-mcp/commit/9843035f7e45c6c401a1d8c1a2339136fb1b3339))
+
+
+### Documentation
+
+* **skill:** document the view response shape in the onehome skill ([#162](https://github.com/chrischall/onehome-mcp/issues/162)) ([069030b](https://github.com/chrischall/onehome-mcp/commit/069030b1bf62341a7f29398a279622d03addc43c))
+
 ## [0.15.0](https://github.com/chrischall/onehome-mcp/compare/v0.14.0...v0.15.0) (2026-09-04)
 
 
