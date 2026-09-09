@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.2](https://github.com/chrischall/onehome-mcp/compare/v0.15.1...v0.15.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **deps:** Bump hono from 4.13.0 to 4.13.7 ([#173](https://github.com/chrischall/onehome-mcp/issues/173)) ([899d329](https://github.com/chrischall/onehome-mcp/commit/899d329a5ee8d0a0f2dfb0d2182a297728a351b3))
+* **deps:** require @fetchproxy/server ^2.7.0, the first that reads FETCHPROXY_IDENTITY_DIR ([#171](https://github.com/chrischall/onehome-mcp/issues/171)) ([5808f4d](https://github.com/chrischall/onehome-mcp/commit/5808f4dcbf937d57f16c6838bd805673719cbcc1))
+
 ## [0.15.1](https://github.com/chrischall/onehome-mcp/compare/v0.15.0...v0.15.1) (2026-09-04)
 
 
