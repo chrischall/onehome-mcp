@@ -301,27 +301,21 @@ describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())
  *
  * A per-call `timeoutMs` reaches the extension, but the reply is ALSO raced
  * against the transport's `fetchTimeoutMs`, and a per-call value cannot raise
- * it. This transport set no `fetchTimeoutMs`, so it took @fetchproxy/server's
- * 30 s default and the shorter deadline won — silently, on the one wait whose
- * whole purpose is to give a PERSON time to act.
+ * it. This transport set no `fetchTimeoutMs`, so it took the 30 s default and
+ * the shorter deadline won — silently, on the one wait whose whole purpose is
+ * to give a PERSON time to act.
  *
- * Asserted on the opts handed to the server, because that is where the defect
- * lived: the call site always looked correct.
+ * Asserted on the opts the server was constructed with, because that is where
+ * the defect lived: the call site always looked correct.
  */
 describe('the declared capture window reaches the transport (#178)', () => {
-  const optsSeenByServer = (): Record<string, unknown> => {
-    const seen: Record<string, unknown>[] = [];
-    const createServer = (o: Record<string, unknown>): never => {
-      seen.push(o);
-      return { role: null, listen: async () => {}, close: async () => {} } as never;
-    };
-    new FetchproxyTransport({ version: '0.0.0', createServer: createServer as never });
-    return seen[0]!;
+  const deadline = (): number => {
+    newTransport({ version: '0.0.0-test' });
+    return constructorCalls[0]!.fetchTimeoutMs!;
   };
 
   it('gives the extension the whole 120 s it asks for', () => {
-    const deadline = optsSeenByServer().fetchTimeoutMs as number;
-    expect(deadline).toBeGreaterThanOrEqual(CAPTURE_TIMEOUT_MS);
+    expect(deadline()).toBeGreaterThanOrEqual(CAPTURE_TIMEOUT_MS);
   });
 
   /**
@@ -331,12 +325,12 @@ describe('the declared capture window reaches the transport (#178)', () => {
    * act on.
    */
   it('leaves the extension’s timer first, so its remedy survives', () => {
-    expect(optsSeenByServer().fetchTimeoutMs as number).toBeGreaterThan(CAPTURE_TIMEOUT_MS);
+    expect(deadline()).toBeGreaterThan(CAPTURE_TIMEOUT_MS);
   });
 
   // The regression this replaces: 30 s, the server default, for a window the
   // code believed was 120 s.
   it('is no longer the server default', () => {
-    expect(optsSeenByServer().fetchTimeoutMs).not.toBe(30_000);
+    expect(deadline()).not.toBe(30_000);
   });
 });
