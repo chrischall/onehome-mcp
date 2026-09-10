@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.3](https://github.com/chrischall/onehome-mcp/compare/v0.15.2...v0.15.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* **deps:** @fetchproxy/server 2.10.0 and @chrischall/mcp-utils 0.26.1 ([#176](https://github.com/chrischall/onehome-mcp/issues/176)) ([64dc5c5](https://github.com/chrischall/onehome-mcp/commit/64dc5c5b378719af5662f21114f8c3db8978cd76))
+* **deps:** declare the peer floors mcp-utils 0.26.1 requires ([#177](https://github.com/chrischall/onehome-mcp/issues/177)) ([2fcf451](https://github.com/chrischall/onehome-mcp/commit/2fcf4518b2acfbe6e8113fcf7aeb067d5018cb98))
+* **deps:** take @fetchproxy/server 2.9.1 so a pairing prompt survives ([#174](https://github.com/chrischall/onehome-mcp/issues/174)) ([36d015f](https://github.com/chrischall/onehome-mcp/commit/36d015f71f76a900c4fcf8823bec6608a0141e2d))
+
 ## [0.15.2](https://github.com/chrischall/onehome-mcp/compare/v0.15.1...v0.15.2) (2026-09-09)
 
 
