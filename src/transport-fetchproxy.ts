@@ -48,13 +48,24 @@ const ORIGIN = 'https://portal.onehome.com';
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/127.0 Safari/537.36';
-const CAPTURE_TIMEOUT_MS = 120_000;
+/**
+ * How long to wait for the user to make the portal do something we can
+ * snapshot. Exported so a test can assert the transport deadline actually
+ * clears it — the value was declared here and served as 30 s for as long as
+ * this file has existed (#178).
+ */
+export const CAPTURE_TIMEOUT_MS = 120_000;
 
 /**
  * Thrown when captureRequestHeader() returns a non-bridge-down error —
  * typically the 120s user-interaction timeout (the user hasn't moved
  * the map / clicked a pin / etc. yet so no GraphQL call has gone out
  * for us to snapshot).
+ *
+ * That 120 s is real as of #178 and was not before it: the transport deadline
+ * capped the window at 30 s, so this error fired four times sooner than this
+ * comment claimed, on a wait whose entire purpose is to give a PERSON time to
+ * act.
  *
  * Service-worker eviction is NOT this error: as of @fetchproxy/server
  * 0.8.0 the server detects content_script_unreachable, waits
@@ -138,6 +149,18 @@ export class FetchproxyTransport implements OneHomeTransport {
           headerName: 'Authorization',
         },
       ],
+      // Make CAPTURE_TIMEOUT_MS real (#178). A per-call `timeoutMs` is
+      // forwarded to the extension but the reply is ALSO raced against the
+      // transport's `fetchTimeoutMs`, which a per-call value cannot raise — so
+      // without this the 120 s window below was silently served as 30 s, and
+      // the error it produced named a number this repo never chose.
+      //
+      // Declared here rather than worked around at the call site because the
+      // deadline belongs to the transport: `captureWindowMs` raises it to
+      // clear the window, and keeps the EXTENSION's timer the one that fires,
+      // so a closed window returns the rejection that carries an actionable
+      // remedy.
+      captureWindowMs: CAPTURE_TIMEOUT_MS,
       // Emit the canonical fleet banner on start() — stderr only (stdout is the
       // MCP JSON-RPC channel). This replaces the hand-rolled console.error.
       logListening: true,

@@ -8,6 +8,7 @@ import {
   FetchproxyAuthCaptureError,
   FetchproxyBridgeDownError,
   type FetchproxyTransportOptions,
+  CAPTURE_TIMEOUT_MS,
 } from '../src/transport-fetchproxy.js';
 
 // Adapter-level tests for the onehome FetchproxyTransport.
@@ -292,5 +293,50 @@ describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())
     expect(stubFetch).toHaveBeenCalledTimes(2); // initial + one retry
     expect(res.status).toBe(403);
     expect(res.ok).toBe(false);
+  });
+});
+
+/**
+ * chrischall/onehome-mcp#178 — the declared 120 s window was served as 30 s.
+ *
+ * A per-call `timeoutMs` reaches the extension, but the reply is ALSO raced
+ * against the transport's `fetchTimeoutMs`, and a per-call value cannot raise
+ * it. This transport set no `fetchTimeoutMs`, so it took @fetchproxy/server's
+ * 30 s default and the shorter deadline won — silently, on the one wait whose
+ * whole purpose is to give a PERSON time to act.
+ *
+ * Asserted on the opts handed to the server, because that is where the defect
+ * lived: the call site always looked correct.
+ */
+describe('the declared capture window reaches the transport (#178)', () => {
+  const optsSeenByServer = (): Record<string, unknown> => {
+    const seen: Record<string, unknown>[] = [];
+    const createServer = (o: Record<string, unknown>): never => {
+      seen.push(o);
+      return { role: null, listen: async () => {}, close: async () => {} } as never;
+    };
+    new FetchproxyTransport({ version: '0.0.0', createServer: createServer as never });
+    return seen[0]!;
+  };
+
+  it('gives the extension the whole 120 s it asks for', () => {
+    const deadline = optsSeenByServer().fetchTimeoutMs as number;
+    expect(deadline).toBeGreaterThanOrEqual(CAPTURE_TIMEOUT_MS);
+  });
+
+  /**
+   * Strictly greater, not equal. Equal is still a race the transport wins —
+   * its timer starts first, since its frame has yet to travel — and losing it
+   * costs the extension's rejection, the one carrying a remedy the user can
+   * act on.
+   */
+  it('leaves the extension’s timer first, so its remedy survives', () => {
+    expect(optsSeenByServer().fetchTimeoutMs as number).toBeGreaterThan(CAPTURE_TIMEOUT_MS);
+  });
+
+  // The regression this replaces: 30 s, the server default, for a window the
+  // code believed was 120 s.
+  it('is no longer the server default', () => {
+    expect(optsSeenByServer().fetchTimeoutMs).not.toBe(30_000);
   });
 });
