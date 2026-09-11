@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.5](https://github.com/chrischall/onehome-mcp/compare/v0.15.4...v0.15.5) (2026-09-11)
+
+
+### Bug Fixes
+
+* **deps:** @fetchproxy/server 2.11.3, so the hosted extension pin persists ([#183](https://github.com/chrischall/onehome-mcp/issues/183)) ([89f7794](https://github.com/chrischall/onehome-mcp/commit/89f7794179b466c8ad9ad2745a53dbb959d00f00))
+
 ## [0.15.4](https://github.com/chrischall/onehome-mcp/compare/v0.15.3...v0.15.4) (2026-09-10)
 
 
