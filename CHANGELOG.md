@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.4](https://github.com/chrischall/onehome-mcp/compare/v0.15.3...v0.15.4) (2026-09-10)
+
+
+### Bug Fixes
+
+* give the capture the 120 seconds it declares ([#179](https://github.com/chrischall/onehome-mcp/issues/179)) ([fae5caf](https://github.com/chrischall/onehome-mcp/commit/fae5cafd480f2fbf41bf22fddba441ad025e7b94)), closes [#178](https://github.com/chrischall/onehome-mcp/issues/178)
+
 ## [0.15.3](https://github.com/chrischall/onehome-mcp/compare/v0.15.2...v0.15.3) (2026-09-10)
 
 
