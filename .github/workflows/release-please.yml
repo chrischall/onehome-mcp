@@ -97,11 +97,29 @@ jobs:
           # dispatch path.
           ref: ${{ needs.release-please.outputs.tag_name || inputs.republish_tag }}
 
+      # ONE derivation for both paths, because they disagree about shape:
+      # release-please emits `version` bare (1.2.3) and `tag_name` prefixed
+      # (v1.2.3), while a dispatch supplies only the TAG. Passing the tag
+      # straight through as `version` publishes `v1.2.3` as a version string,
+      # which is the shape mismatch review caught here.
+      #
+      # The tag is read from env rather than interpolated into the script: a
+      # dispatch input is caller-supplied text, and `${{ }}` inside a run body
+      # is a shell-injection seam.
+      - id: release_ref
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name || inputs.republish_tag }}
+        run: |
+          if ! [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag '${TAG}' must be v?MAJOR.MINOR.PATCH[-suffix]" >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - uses: chrischall/workflows/.github/actions/mcp-publish@main
         with:
-          # On the dispatch path release-please emits no version, so it is
-          # derived from the tag being republished.
-          version: ${{ needs.release-please.outputs.version || inputs.republish_tag }}
-          tag-name: ${{ needs.release-please.outputs.tag_name || inputs.republish_tag }}
+          version: ${{ steps.release_ref.outputs.version }}
+          tag-name: ${{ steps.release_ref.outputs.tag }}
           clawhub-token: ${{ secrets.CLAWHUB_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
