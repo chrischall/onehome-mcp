@@ -14,7 +14,24 @@ name: release-please
 on:
   push:
     branches: [main]
+  # `republish_tag` re-fires the publish job for a tag that ALREADY EXISTS.
+  #
+  # The gap it closes is not hypothetical: on 2026-09-14 a transient GitHub
+  # API error hit release-please AFTER it had cut the tag and the GitHub
+  # Release, which lost the run's `release_created` output. The publish job is
+  # gated on that output, so it skipped — leaving a tagged, changelogged
+  # release with nothing on npm, and no way to finish it. Re-running does not
+  # help, because release-please then correctly reports the release already
+  # exists and sets the flag false again, forever.
+  #
+  # Blank on the ordinary path: this only checks for a new release PR.
   workflow_dispatch:
+    inputs:
+      republish_tag:
+        description: 'Existing tag to re-publish (e.g. v1.2.3). Blank = skip publish.'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -64,7 +81,11 @@ jobs:
 
   publish:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # Either a fresh release, or a dispatch naming an existing tag whose
+    # original publish never ran.
+    if: |
+      needs.release-please.outputs.release_created == 'true' ||
+      (github.event_name == 'workflow_dispatch' && inputs.republish_tag != '')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -72,11 +93,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          # The release-please tag on the auto path; the supplied one on the
+          # dispatch path.
+          ref: ${{ needs.release-please.outputs.tag_name || inputs.republish_tag }}
 
       - uses: chrischall/workflows/.github/actions/mcp-publish@main
         with:
-          version: ${{ needs.release-please.outputs.version }}
-          tag-name: ${{ needs.release-please.outputs.tag_name }}
+          # On the dispatch path release-please emits no version, so it is
+          # derived from the tag being republished.
+          version: ${{ needs.release-please.outputs.version || inputs.republish_tag }}
+          tag-name: ${{ needs.release-please.outputs.tag_name || inputs.republish_tag }}
           clawhub-token: ${{ secrets.CLAWHUB_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
