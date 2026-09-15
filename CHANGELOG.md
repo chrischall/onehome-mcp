@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.7](https://github.com/chrischall/onehome-mcp/compare/v0.15.6...v0.15.7) (2026-09-15)
+
+
+### Bug Fixes
+
+* **deps:** @fetchproxy/server 3.0.1 — capped peer frames, logged load drops, atomic identity writes ([#192](https://github.com/chrischall/onehome-mcp/issues/192)) ([19688f3](https://github.com/chrischall/onehome-mcp/commit/19688f34a7d294360d4f5c80a487f11406e4ca41))
+
 ## [0.15.6](https://github.com/chrischall/onehome-mcp/compare/v0.15.5...v0.15.6) (2026-09-15)
 
 
