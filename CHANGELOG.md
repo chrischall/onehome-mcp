@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.6](https://github.com/chrischall/onehome-mcp/compare/v0.15.5...v0.15.6) (2026-09-15)
+
+
+### Bug Fixes
+
+* **deps:** Bump zod in the production-dependencies group ([#189](https://github.com/chrischall/onehome-mcp/issues/189)) ([efac5c4](https://github.com/chrischall/onehome-mcp/commit/efac5c4a2f2bac3569d0e289701e895bfd8d4498))
+
 ## [0.15.5](https://github.com/chrischall/onehome-mcp/compare/v0.15.4...v0.15.5) (2026-09-14)
 
 
