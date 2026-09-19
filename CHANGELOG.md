@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/chrischall/onehome-mcp/compare/v1.0.0...v1.1.0) (2026-09-19)
+
+
+### Features
+
+* **deps:** take mcp-utils 1.0.0, fixing server/discover ([#199](https://github.com/chrischall/onehome-mcp/issues/199)) ([7478da9](https://github.com/chrischall/onehome-mcp/commit/7478da9b8a6fcb2fd015541e5cc2553725cdab12))
+
 ## [1.0.0](https://github.com/chrischall/onehome-mcp/compare/v0.15.7...v1.0.0) (2026-09-19)
 
 
