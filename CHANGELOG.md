@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/chrischall/onehome-mcp/compare/v0.15.7...v1.0.0) (2026-09-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **mcp:** migrate server to SDK v2 ([#194](https://github.com/chrischall/onehome-mcp/issues/194))
+
+### Features
+
+* **mcp:** migrate server to SDK v2 ([#194](https://github.com/chrischall/onehome-mcp/issues/194)) ([7beb3dc](https://github.com/chrischall/onehome-mcp/commit/7beb3dc753f842dde74b4d8f15efe82ef6fc67e1))
+
 ## [0.15.7](https://github.com/chrischall/onehome-mcp/compare/v0.15.6...v0.15.7) (2026-09-15)
 
 
