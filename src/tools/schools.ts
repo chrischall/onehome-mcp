@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 
@@ -94,11 +94,11 @@ export function registerSchoolsTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         lat: z.number(),
         lng: z.number(),
         language: z.string().optional(),
-      },
+      }),
     },
     async (i) => {
       const path = buildPath('schools', i);
@@ -142,11 +142,11 @@ export function registerSchoolsTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         lat: z.number(),
         lng: z.number(),
         language: z.string().optional(),
-      },
+      }),
     },
     async (i) => {
       const path = buildPath('scores', i);

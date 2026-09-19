@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { buildListingById } from '../queries.js';
@@ -73,7 +73,7 @@ export function registerPropertyTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         group_id: z.string().optional(),
         listing_id: z.string().optional(),
         url: z.string().optional(),
@@ -84,7 +84,7 @@ export function registerPropertyTools(
           .describe(
             'Include the raw `description` (PublicRemarks) in the response. Defaults to `false` — `extracted_features` is always populated and usually sufficient.'
           ),
-      },
+      }),
     },
     async (i) => {
       const { listingId, raw } = await fetchListingDetail(client, {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import {
@@ -64,7 +64,7 @@ export function registerSearchTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         group_id: z.string().optional(),
         saved_search_id: z.string().optional(),
         page_num: z.number().int().nonnegative().optional(),
@@ -75,7 +75,7 @@ export function registerSearchTools(
           .describe('GraphQL dotted-path, e.g. property.MajorChangeTimestamp or property.ListPrice'),
         sort_order: z.enum(['ASC', 'DESC']).optional(),
         include_dislikes: z.boolean().optional(),
-      },
+      }),
     },
     async (i) => {
       const ctx = client.bridgeStatus().sessionContext;
@@ -217,10 +217,10 @@ export function registerSearchTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1),
         group_id: z.string().optional(),
-      },
+      }),
     },
     async (i) => {
       const ctx = client.bridgeStatus().sessionContext;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import {
   mapWithConcurrency,
   retryOnceOnTimeout,
@@ -45,7 +45,7 @@ export function registerBulkGetTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         group_id: z.string().optional(),
         saved_search_id: z.string().optional(),
         listing_ids: z
@@ -61,7 +61,7 @@ export function registerBulkGetTools(
           .describe(
             'Include the raw `description` (PublicRemarks) on each row. Defaults to `false`.'
           ),
-      },
+      }),
     },
     async (i) => {
       const ctx = client.bridgeStatus().sessionContext;

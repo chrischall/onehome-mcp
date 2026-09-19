@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { buildMediaListingById } from '../queries.js';
@@ -63,11 +63,11 @@ export function registerPhotosTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         group_id: z.string().optional(),
         listing_id: z.string().optional(),
         url: z.string().optional(),
-      },
+      }),
     },
     async (i) => {
       const id = i.listing_id ?? (i.url ? extractListingId(i.url) : null);

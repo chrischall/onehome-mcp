@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
@@ -290,7 +290,7 @@ export function registerByAddressTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         view: viewArg(),
         address: z
           .string()
@@ -308,7 +308,7 @@ export function registerByAddressTools(
           .describe(
             'Optional OneHome group id to scope the suggestion search. Defaults to the magic-link session context when present.'
           ),
-      },
+      }),
     },
     // `view` is destructured OFF before anything else touches the input. It
     // is a RESPONSE-shape argument and OneHome has never heard of it, and the
