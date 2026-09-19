@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
@@ -44,12 +44,12 @@ export function registerGraphqlTool(
         idempotentHint: false,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         view: viewArg(),
         operation_name: z.string(),
         query: z.string(),
         variables: z.record(z.string(), z.unknown()).optional(),
-      },
+      }),
     },
     async (i) => {
       const result = await client.graphqlRaw({

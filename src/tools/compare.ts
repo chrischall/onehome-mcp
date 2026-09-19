@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
@@ -77,7 +77,7 @@ export function registerCompareTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         view: viewArg(),
         group_id: z.string().optional(),
         targets: z
@@ -102,7 +102,7 @@ export function registerCompareTools(
           .describe(
             'Include the pivoted `summary` table (one row per compared field, one column per listing). Defaults to `false` because `rows[].property.*` already carries everything — the summary is roughly 30% of the response weight and only useful for human-readable rendering.'
           ),
-      },
+      }),
     },
     async (i) => {
       const groupId =

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import {
   mapWithConcurrency,
   retryOnceOnTimeout,
@@ -85,7 +85,7 @@ export function registerResolveAddressesTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         addresses: z
           .array(
             z.object({
@@ -112,7 +112,7 @@ export function registerResolveAddressesTools(
           .describe(
             'OneHome group id to scope every row. Defaults to magic-link session context.'
           ),
-      },
+      }),
     },
     async (input) => {
       const ctx = client.bridgeStatus().sessionContext;

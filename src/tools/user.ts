@@ -1,4 +1,5 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
@@ -98,8 +99,8 @@ export function registerUserTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
-        view: viewArg(),},
+      inputSchema: z.object({
+        view: viewArg(),}),
     },
     async ({ view }) => {
       try {
@@ -154,7 +155,7 @@ export function registerUserTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async () => {
       try {
@@ -207,7 +208,7 @@ export function registerUserTools(
         idempotentHint: true,
         openWorldHint: false,
       },
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async () => {
       const sessions = client.listSessions().map((s) => ({

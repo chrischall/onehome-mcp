@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { buildGetSavedSearchBySearchId } from '../queries.js';
@@ -88,10 +88,10 @@ export function registerSavedTools(
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         saved_search_id: z.string().optional(),
         include_listing_ids: z.boolean().optional(),
-      },
+      }),
     },
     async (i) => {
       const id =

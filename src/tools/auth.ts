@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 
@@ -37,14 +37,14 @@ export function registerAuthTools(
         idempotentHint: false,
         openWorldHint: true,
       },
-      inputSchema: {
+      inputSchema: z.object({
         input: z
           .string()
           .min(1)
           .describe(
             'Magic-link URL (https://portal.onehome.com/...?token=eyJ...), JWT bearer (3 dot-separated segments), or raw email-token (single base64 segment).'
           ),
-      },
+      }),
     },
     async ({ input }) => {
       const { sessionId, status, bearer } = await client.setAuthFromInput(input);
@@ -75,14 +75,14 @@ export function registerAuthTools(
         idempotentHint: true,
         openWorldHint: false,
       },
-      inputSchema: {
+      inputSchema: z.object({
         session_id: z
           .string()
           .min(1)
           .describe(
             'Session id from a previous `onehome_set_auth` response, or one of the ids listed by `onehome_get_session_context`.'
           ),
-      },
+      }),
     },
     async ({ session_id }) => {
       client.setActiveSession(session_id);

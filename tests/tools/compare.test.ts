@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildSummary, registerCompareTools } from '../../src/tools/compare.js';
 import type { FormattedListing } from '../../src/format.js';
 import { ok, makeClient, createTestHarness, FakeTransport } from '../helpers.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 
 const A: FormattedListing = {
   listing_id: 'A',
