@@ -35,6 +35,10 @@ import type {
   RestResponse,
   SessionContext,
 } from './transport.js';
+import {
+  fetchTextWithDeadline,
+  OneHomeRequestTimeoutError,
+} from './request-deadline.js';
 
 const GRAPHQL_URL = 'https://services.onehome.com/graphql';
 const REST_BASE = 'https://services.onehome.com/api';
@@ -54,6 +58,8 @@ export interface DirectTransportOptions {
   authMode: 'env_token' | 'magic_link';
   /** Fetch impl (allows tests to inject). Defaults to globalThis.fetch. */
   fetchImpl?: typeof fetch;
+  /** Per-request deadline in ms (fetch + body read). Defaults to `REQUEST_TIMEOUT_MS`. */
+  requestTimeoutMs?: number;
 }
 
 /**
@@ -96,6 +102,7 @@ export class DirectTransport implements OneHomeTransport {
   private readonly inputToken: string;
   private readonly mode: 'env_token' | 'magic_link';
   private readonly fetchImpl: typeof fetch;
+  private readonly requestTimeoutMs: number | undefined;
   private bearerToken: string;
   private bearerExpiresAt: number | null;
   private sessionContext: SessionContext = {};
@@ -112,6 +119,7 @@ export class DirectTransport implements OneHomeTransport {
     this.inputToken = opts.token;
     this.mode = opts.authMode;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+    this.requestTimeoutMs = opts.requestTimeoutMs;
     // Optimistic init: if the input looks like a JWT we don't need
     // the exchange and we can serve `status()` immediately.
     if (isJwtShape(opts.token)) {
@@ -179,25 +187,37 @@ export class DirectTransport implements OneHomeTransport {
       variables: req.variables ?? {},
     });
     let response: Response;
+    let text: string;
     try {
-      response = await this.fetchImpl(GRAPHQL_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${this.bearerToken}`,
-          Origin: ORIGIN,
-          Referer: `${ORIGIN}/`,
-          'User-Agent': USER_AGENT,
+      ({ response, text } = await fetchTextWithDeadline(
+        this.fetchImpl,
+        GRAPHQL_URL,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: `Bearer ${this.bearerToken}`,
+            Origin: ORIGIN,
+            Referer: `${ORIGIN}/`,
+            'User-Agent': USER_AGENT,
+          },
+          body,
         },
-        body,
-      });
+        {
+          label: `OneHome GraphQL ${req.operationName}`,
+          timeoutMs: this.requestTimeoutMs,
+        }
+      ));
     } catch (err) {
+      if (err instanceof OneHomeRequestTimeoutError) {
+        this.recordFailure(err.message);
+        throw err;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       this.recordFailure(`network error: ${msg}`);
       throw new Error(`onehome-mcp direct fetch failed: ${msg}`);
     }
-    const text = await response.text();
     if (response.status === 401 || response.status === 403) {
       this.recordFailure(`HTTP ${response.status}`);
       throw new Error(
@@ -236,23 +256,32 @@ export class DirectTransport implements OneHomeTransport {
     const normalized = path.startsWith('/') ? path : `/${path}`;
     const url = `${REST_BASE}${normalized}`;
     let response: Response;
+    let text: string;
     try {
-      response = await this.fetchImpl(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${this.bearerToken}`,
-          Origin: ORIGIN,
-          Referer: `${ORIGIN}/`,
-          'User-Agent': USER_AGENT,
+      ({ response, text } = await fetchTextWithDeadline(
+        this.fetchImpl,
+        url,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${this.bearerToken}`,
+            Origin: ORIGIN,
+            Referer: `${ORIGIN}/`,
+            'User-Agent': USER_AGENT,
+          },
         },
-      });
+        { label: `OneHome REST ${normalized}`, timeoutMs: this.requestTimeoutMs }
+      ));
     } catch (err) {
+      if (err instanceof OneHomeRequestTimeoutError) {
+        this.recordFailure(err.message);
+        throw err;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       this.recordFailure(`rest network error: ${msg}`);
       throw new Error(`onehome-mcp REST fetch failed: ${msg}`);
     }
-    const text = await response.text();
     const isOk = response.status >= 200 && response.status < 300;
     if (isOk) this.recordSuccess();
     else this.recordFailure(`REST HTTP ${response.status}`);
