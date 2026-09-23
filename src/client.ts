@@ -28,6 +28,7 @@ import type {
   GraphQLResponse,
   OneHomeTransport,
   RestResponse,
+  SessionContext,
 } from './transport.js';
 
 export class GraphQLResponseError extends Error {
@@ -243,6 +244,17 @@ export class OneHomeClient {
       );
     }
     return active;
+  }
+
+  /**
+   * Session context of the session a request for `listingId` would be
+   * routed to (the `~MLS`-matching session, else the active one). Tools
+   * must default `groupId` / `savedSearchId` from THIS rather than from
+   * `bridgeStatus()` — otherwise a routed request carries the active
+   * session's ids with another session's bearer.
+   */
+  sessionContextFor(listingId?: string): SessionContext {
+    return this.routeFor(listingId ? { listingId } : undefined).status().sessionContext;
   }
 
   /**

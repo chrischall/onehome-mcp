@@ -64,9 +64,11 @@ export function registerBulkGetTools(
       }),
     },
     async (i) => {
-      const ctx = client.bridgeStatus().sessionContext;
-      const groupId = i.group_id ?? ctx.groupId;
-      const savedSearchId = i.saved_search_id ?? ctx.savedSearchId;
+      // Only forward explicit ids; fetchListingDetail defaults each row
+      // from the session its listing id routes to (multi-session MLS
+      // routing), not from the active session.
+      const groupId = i.group_id;
+      const savedSearchId = i.saved_search_id;
       const includeDescription = i.include_description ?? false;
       const rows = await mapWithConcurrency(
         i.listing_ids,
@@ -90,8 +92,9 @@ export function registerBulkGetTools(
           return row;
         }
       );
+      const reportedGroupId = groupId ?? client.sessionContextFor().groupId;
       return minifiedResult({
-        ...(groupId ? { group_id: groupId } : {}),
+        ...(reportedGroupId ? { group_id: reportedGroupId } : {}),
         count: rows.length,
         rows,
       });

@@ -29,7 +29,7 @@ export async function fetchListingDetail(
         '(e.g. https://portal.onehome.com/en-US/properties/<id>).'
     );
   }
-  const ctx = client.bridgeStatus().sessionContext;
+  const ctx = client.sessionContextFor(id);
   const groupId = args.group_id ?? ctx.groupId;
   if (!groupId) {
     throw new Error(

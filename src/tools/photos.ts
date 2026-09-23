@@ -76,8 +76,7 @@ export function registerPhotosTools(
           'onehome_get_property_photos: provide either `listing_id` or a portal URL.'
         );
       }
-      const groupId =
-        i.group_id ?? client.bridgeStatus().sessionContext.groupId;
+      const groupId = i.group_id ?? client.sessionContextFor(id).groupId;
       if (!groupId) {
         throw new Error(
           'onehome_get_property_photos: no group_id supplied and the MCP ' +
