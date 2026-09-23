@@ -384,7 +384,15 @@ export class FetchproxyTransport implements OneHomeTransport {
   private async ensureToken(): Promise<void> {
     if (this.token) return;
     if (!this.capturePromise) {
-      this.capturePromise = this.captureToken();
+      // Memoise only while in flight / on success. A rejected capture (e.g.
+      // the 120 s timeout before the user touches the portal, or a
+      // bridge-down error) must be forgotten, or every later call would
+      // re-await the same stale rejection until the process restarts.
+      const pending: Promise<string> = this.captureToken().catch((err: unknown) => {
+        if (this.capturePromise === pending) this.capturePromise = null;
+        throw err;
+      });
+      this.capturePromise = pending;
     }
     const captured = await this.capturePromise;
     this.setToken(captured);

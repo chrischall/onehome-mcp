@@ -161,6 +161,86 @@ describe('FetchproxyTransport — capture error surface (post-server-retry)', ()
     ).rejects.toBeInstanceOf(FetchproxyAuthCaptureError);
   });
 
+  // fleet-audit#11: a rejected capture must not be memoised. Before the fix,
+  // one capture timeout (user hadn't touched the portal yet) poisoned every
+  // later call with the same stale error until the process restarted.
+  it('recaptures on the next graphql() call after a capture timeout', async () => {
+    let captures = 0;
+    captureBehavior = async () => {
+      captures += 1;
+      if (captures === 1) {
+        throw new Error('timeout: no matching request observed within 120000ms');
+      }
+      return 'Bearer eyJ.after.signin';
+    };
+    const stubFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
+    const t = newTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    await expect(
+      t.graphql({ operationName: 'X', query: 'query X { ok }' }),
+    ).rejects.toBeInstanceOf(FetchproxyAuthCaptureError);
+    await expect(
+      t.graphql({ operationName: 'X', query: 'query X { ok }' }),
+    ).resolves.toBeDefined();
+    expect(captures).toBe(2);
+    const headers = (stubFetch.mock.calls[0][1] as RequestInit).headers as Record<
+      string,
+      string
+    >;
+    expect(headers.Authorization).toBe('Bearer eyJ.after.signin');
+  });
+
+  it('recaptures on the next rest() call after a bridge-down capture failure', async () => {
+    let captures = 0;
+    captureBehavior = async () => {
+      captures += 1;
+      if (captures === 1) {
+        throw new FetchproxyBridgeDownError({
+          originalError: 'Could not establish connection.',
+          retryAttempted: true,
+          op: 'capture_request_header',
+        });
+      }
+      return 'Bearer eyJ.bridge.back';
+    };
+    const stubFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const t = newTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    await expect(t.rest('/locallogic/scores?lat=1&lng=2')).rejects.toBeInstanceOf(
+      FetchproxyBridgeDownError,
+    );
+    const res = await t.rest('/locallogic/scores?lat=1&lng=2');
+    expect(res.ok).toBe(true);
+    expect(captures).toBe(2);
+  });
+
+  it('still shares one in-flight capture between concurrent callers, even when it fails', async () => {
+    let rejectCapture!: (e: Error) => void;
+    captureBehavior = () =>
+      new Promise<string>((_, reject) => {
+        rejectCapture = reject;
+      });
+    const t = newTransport({ version: '0.0.0-test' });
+    await t.start();
+    const a = t.graphql({ operationName: 'X', query: 'query X { ok }' });
+    const b = t.graphql({ operationName: 'X', query: 'query X { ok }' });
+    await vi.waitFor(() => expect(rejectCapture).toBeTypeOf('function'));
+    rejectCapture(new Error('timeout'));
+    await expect(a).rejects.toBeInstanceOf(FetchproxyAuthCaptureError);
+    await expect(b).rejects.toBeInstanceOf(FetchproxyAuthCaptureError);
+    expect(captureCallCount).toBe(1);
+  });
+
   it('re-exports FetchproxyBridgeDownError so callers importing from this module keep working', async () => {
     const fp = await import('@fetchproxy/server');
     expect(FetchproxyBridgeDownError).toBe(fp.FetchproxyBridgeDownError);
