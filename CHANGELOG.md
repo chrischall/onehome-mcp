@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/chrischall/onehome-mcp/compare/v1.1.1...v1.1.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* **fetchproxy:** recapture the token after a failed capture instead of failing forever ([#207](https://github.com/chrischall/onehome-mcp/issues/207)) ([f442c84](https://github.com/chrischall/onehome-mcp/commit/f442c848e9b9d979f276205cbdc716159ae3cf48))
+* route session defaults per listing, verify address matches, time out stalled requests, refuse GraphQL mutations ([#209](https://github.com/chrischall/onehome-mcp/issues/209)) ([a15cd97](https://github.com/chrischall/onehome-mcp/commit/a15cd97e9acacd42b81ca591627ee40238ae07bc))
+
 ## [1.1.1](https://github.com/chrischall/onehome-mcp/compare/v1.1.0...v1.1.1) (2026-09-23)
 
 
