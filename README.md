@@ -40,7 +40,7 @@ So instead of routing every fetch through your signed-in browser tab (like the o
 | `onehome_compare_properties` | 2-8 listings side-by-side. Per-row error capture; calls are concurrent. |
 | `onehome_get_schools` | Local-Logic primary + high schools near a lat/lng. |
 | `onehome_get_walk_score` | Local-Logic walk / transit / bike / car friendliness scores. |
-| `onehome_graphql` | Power-user escape hatch — send a raw GraphQL document with variables. |
+| `onehome_graphql` | Power-user escape hatch — send a raw read-only GraphQL document (queries only; mutations and subscriptions are refused) with variables. |
 | `onehome_calculate_mortgage` | Local PITI calculator. Same math as the other realty MCPs. |
 | `onehome_calculate_affordability` | Local 28/36 DTI solver — max home price you can afford. |
 | `onehome_set_auth` | Add another authenticated session at runtime (magic link / JWT / email-token) for buyers holding shares across multiple agents. |
