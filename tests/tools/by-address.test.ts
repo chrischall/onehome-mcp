@@ -758,3 +758,83 @@ describe('onehome_get_by_address — view', () => {
     expect(compact.listing_id).toBe('L-1');
   });
 });
+
+// chrischall/fleet-audit#191: ListingSuggestionsSearch is a fuzzy
+// type-ahead, so rung 1 must verify the suggestion's address before
+// reporting resolved:true.
+describe('onehome_get_by_address — suggestion address verification', () => {
+  it('rejects a suggestion whose street number differs ("26" vs "126")', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          {
+            id: 'WRONG',
+            streetNumber: '126',
+            streetName: 'Bear',
+            streetSuffix: 'Ln',
+            city: 'Lake Lure',
+            stateOrProvince: 'NC',
+          },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '26 Bear Ln', city: 'Lake Lure' });
+    expect(result.resolved).toBe(false);
+    expect(result.listing_id).toBeUndefined();
+  });
+
+  it('rejects a suggestion on a different street', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          { id: 'WRONG', streetNumber: '212', streetName: 'Ridgeway', streetSuffix: 'Rd' },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '212 Sleeping Bear Ln' });
+    expect(result.resolved).toBe(false);
+  });
+
+  it('skips non-matching suggestions and accepts the first matching one', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          { id: 'NEIGHBOUR', streetNumber: '128', streetName: 'Sleeping Bear', streetSuffix: 'Lane' },
+          { id: 'RIGHT', streetNumber: '126', streetName: 'Sleeping Bear', streetSuffix: 'Lane' },
+        ],
+      })
+    );
+    const result = await callBy(transport, { address: '126 Sleeping Bear Ln' });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('RIGHT');
+    expect(result.matched_via).toBe('suggestions');
+  });
+
+  it('falls through to the search-fallback rung when no suggestion matches', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({ sessionContext: { groupId: 'g-ctx' } });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({
+        listingSuggestionsSearch: [
+          { id: 'WRONG', streetNumber: '126', streetName: 'Bear', streetSuffix: 'Ln' },
+        ],
+      })
+    );
+    transport.on('GetListings', () =>
+      ok({
+        listings: {
+          listings: [
+            { id: 'POOL_HIT', property: { StreetNumber: '26', StreetName: 'Bear', StreetSuffix: 'Ln' } },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, { address: '26 Bear Ln' });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('POOL_HIT');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+});
