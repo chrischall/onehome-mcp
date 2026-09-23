@@ -28,6 +28,45 @@ import { viewArg, viewResponse } from '../view.js';
  * `url`) and any non-media field of `data`.
  */
 
+/**
+ * The operation keyword of every top-level definition in a GraphQL
+ * document (`query`, `mutation`, `subscription`, `fragment`; a shorthand
+ * `{ … }` counts as `query`). A deliberately small lexer rather than a
+ * `graphql` dependency: strings, block strings and comments are blanked
+ * first so their contents can't be mistaken for keywords, then only the
+ * first word of each brace/paren-depth-0 definition is read.
+ */
+export function topLevelOperationKinds(document: string): string[] {
+  const src = document.replace(
+    /"""(?:\\"""|[\s\S])*?"""|"(?:\\.|[^"\\\n])*"|#[^\n\r]*/g,
+    ' '
+  );
+  const kinds: string[] = [];
+  let depth = 0;
+  let expectingDefinition = true;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]!;
+    if (c === '{' || c === '(' || c === '[') {
+      if (depth === 0 && expectingDefinition && c === '{') {
+        kinds.push('query');
+        expectingDefinition = false;
+      }
+      depth++;
+    } else if (c === '}' || c === ')' || c === ']') {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0 && c === '}') expectingDefinition = true;
+    } else if (depth === 0 && expectingDefinition && /[_A-Za-z]/.test(c)) {
+      const word = /^[_A-Za-z][_0-9A-Za-z]*/.exec(src.slice(i))![0];
+      kinds.push(word);
+      expectingDefinition = false;
+      i += word.length - 1;
+    }
+  }
+  return kinds;
+}
+
+const WRITE_OPERATIONS = new Set(['mutation', 'subscription']);
+
 export function registerGraphqlTool(
   server: McpServer,
   client: OneHomeClient
@@ -37,7 +76,7 @@ export function registerGraphqlTool(
     {
       title: 'Send a raw GraphQL document to services.onehome.com',
       description:
-        "Power-user escape hatch — send a raw GraphQL document with variables. Returns the whole `{ data, errors, status, url }` envelope, unprojected, so you can read upstream schema errors directly. Note the default: `view` is `compact`, which strips image/avatar URLs out of `data` (every envelope key and every non-media field is kept). Pass `view: 'full'` when you need the envelope byte for byte — worth doing if you are here because a payload is not what you expected, so a missing field is never this server's doing. Operation names live in the portal bundle; common ones include `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools/walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score`.) Pass `query` (the full document body), an `operation_name` matching the document, and any `variables` as JSON.",
+        "Power-user escape hatch — send a raw GraphQL document with variables. Returns the whole `{ data, errors, status, url }` envelope, unprojected, so you can read upstream schema errors directly. Note the default: `view` is `compact`, which strips image/avatar URLs out of `data` (every envelope key and every non-media field is kept). Pass `view: 'full'` when you need the envelope byte for byte — worth doing if you are here because a payload is not what you expected, so a missing field is never this server's doing. Operation names live in the portal bundle; common ones include `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools/walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score`.) Pass `query` (the full document body), an `operation_name` matching the document, and any `variables` as JSON. Read-only: documents containing a `mutation` or `subscription` operation are refused.",
       annotations: {
         title: 'Send a raw GraphQL document to services.onehome.com',
         readOnlyHint: true,
@@ -52,6 +91,16 @@ export function registerGraphqlTool(
       }),
     },
     async (i) => {
+      const write = topLevelOperationKinds(i.query).find((k) =>
+        WRITE_OPERATIONS.has(k)
+      );
+      if (write) {
+        throw new Error(
+          `onehome_graphql is read-only: the document contains a \`${write}\` ` +
+            'operation, which is refused so this tool never changes portal state ' +
+            '(favorites, saved searches, profile). Send only `query` operations.'
+        );
+      }
       const result = await client.graphqlRaw({
         operationName: i.operation_name,
         query: i.query,

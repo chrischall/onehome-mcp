@@ -222,7 +222,7 @@ export async function resolveByAddressOnce(
     })
   );
   const top = (data.listingSuggestionsSearch ?? []).find(
-    (s) => s.id || s.listingId
+    (s) => (s.id || s.listingId) && suggestionMatches(input, s)
   );
   if (top) {
     const listingId = (top.id || top.listingId) as string;
@@ -265,6 +265,23 @@ export async function resolveByAddressOnce(
     return out;
   }
   return { resolved: false, error: 'no listing found', query };
+}
+
+/**
+ * `ListingSuggestionsSearch` is a fuzzy / prefix type-ahead, so its
+ * first hit can be a neighbouring or partially-matching listing. Verify
+ * it with the same anchored realty-core `addressMatch` the fallback rung
+ * uses ("26 Bear Ln" must not accept "126 Bear Ln"). A suggestion that
+ * carries no street parts at all can't be verified and is accepted as
+ * before — rejecting it would turn every address-less hit into a miss.
+ */
+function suggestionMatches(input: ByAddressInput, s: SuggestionEntry): boolean {
+  const street = streetFromSuggestion(s);
+  if (!street) return true;
+  const haystack = [street, s.city, s.postalCity, s.stateOrProvince, s.postalCode]
+    .filter(Boolean)
+    .join(' ');
+  return addressMatch(input.address, haystack).matched;
 }
 
 function formatSuggestionAddress(s: SuggestionEntry, fallback: string): string {

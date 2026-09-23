@@ -105,8 +105,9 @@ export function registerCompareTools(
       }),
     },
     async (i) => {
-      const groupId =
-        i.group_id ?? client.bridgeStatus().sessionContext.groupId;
+      // Only forward an explicit group_id; fetchListingDetail defaults
+      // each target from the session its listing id routes to.
+      const groupId = i.group_id;
       const rows: CompareRow[] = await Promise.all(
         i.targets.map(async (t) => {
           const row: CompareRow = {};
@@ -134,7 +135,7 @@ export function registerCompareTools(
         summary?: SummaryRow[];
         rows: CompareRow[];
       } = {
-        group_id: groupId,
+        group_id: groupId ?? client.sessionContextFor().groupId,
         target_count: i.targets.length,
         rows,
       };

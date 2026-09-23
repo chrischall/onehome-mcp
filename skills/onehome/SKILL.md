@@ -35,7 +35,7 @@ Run `onehome_healthcheck` first to confirm auth is wired up — it returns the m
 3. **Inflate a listing.** `onehome_get_property { group_id, listing_id }` for the full record. The listing id is an OSK like `EYxOzZSAbCdEf12345`; you can pass a portal URL instead and the MCP will extract it.
 4. **Photos / schools / walkability** are separate calls. Use the lat/lng from `onehome_get_property` to drive `onehome_get_schools` and `onehome_get_walk_score`.
 5. **Compare** `onehome_compare_properties { group_id, targets: [...], view? }` — 2 to 8 listings, concurrent fetch, per-row error capture. Don't fan out manual `get_property` calls when comparing.
-6. **Escape hatch.** `onehome_graphql { operation_name, query, variables?, view? }` lets you send a raw document when you need a field the structured tools don't expose. Common operation names: `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools / walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score` instead.)
+6. **Escape hatch.** `onehome_graphql { operation_name, query, variables?, view? }` lets you send a raw read-only document (mutations and subscriptions are refused) when you need a field the structured tools don't expose. Common operation names: `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools / walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score` instead.)
 
 ## Free-text search
 

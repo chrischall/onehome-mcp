@@ -87,3 +87,51 @@ describe('onehome_graphql — view', () => {
     expect(t.calls[0]!.variables).toEqual({ id: 'A' });
   });
 });
+
+// chrischall/fleet-audit#193: the tool is annotated readOnlyHint:true
+// (clients auto-approve on it), so it must refuse write operations
+// rather than post them with the user's bearer.
+describe('onehome_graphql — read-only enforcement', () => {
+  async function call(query: string) {
+    const t = new FakeTransport();
+    t.on('Op', () => ({ data: { ok: true }, status: 200, url: 'u' }));
+    const client = new OneHomeClient({ transport: t });
+    harness = await createTestHarness((server) => registerGraphqlTool(server, client));
+    const r = await harness.callTool('onehome_graphql', { operation_name: 'Op', query });
+    const first = r.content[0]!;
+    const text = first.type === 'text' ? first.text : '';
+    return { isError: r.isError === true, text, calls: t.calls.length };
+  }
+
+  it.each([
+    ['a mutation', 'mutation Op { dislikeListing(id: "A") }'],
+    ['a subscription', 'subscription Op { listingChanged { id } }'],
+    ['a mutation after a comment', '# harmless\nmutation Op { x }'],
+    ['a mutation in a multi-operation document', 'query Q { a } mutation Op { b }'],
+    ['an anonymous mutation', 'mutation { b }'],
+    ['a mutation after a fragment', 'fragment F on T { id } mutation Op { x { ...F } }'],
+    [
+      'a mutation after a block string with an escaped triple quote',
+      'query Q { a(s: """ \\""" """) } mutation Op { b }',
+    ],
+  ])('rejects %s without sending it upstream', async (_label, query) => {
+    const r = await call(query);
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/read-only/i);
+    expect(r.calls).toBe(0);
+  });
+
+  it.each([
+    ['a named query', 'query Op { a }'],
+    ['a shorthand query', '{ a }'],
+    ['a query whose string argument says mutation', 'query Op { search(q: "mutation { x }") { id } }'],
+    ['a query with a # mutation comment', 'query Op {\n  # mutation Op { x }\n  a\n}'],
+    ['a query with a block string', 'query Op { s(q: """\nmutation X { y }\n""") }'],
+    ['a query with a $mutation variable', 'query Op($mutation: String) { a(b: $mutation) }'],
+    ['a query plus a fragment', 'query Op { ...F } fragment F on T { id }'],
+  ])('allows %s', async (_label, query) => {
+    const r = await call(query);
+    expect(r.isError).toBe(false);
+    expect(r.calls).toBe(1);
+  });
+});
