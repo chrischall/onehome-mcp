@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1](https://github.com/chrischall/onehome-mcp/compare/v1.1.0...v1.1.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **deps:** Bump zod in the production-dependencies group ([#203](https://github.com/chrischall/onehome-mcp/issues/203)) ([262d376](https://github.com/chrischall/onehome-mcp/commit/262d376755feef268f96d2589efc48576f8198a9))
+* **deps:** require zod ^4.6.5 to match @chrischall/mcp-utils 2.4.0 ([#206](https://github.com/chrischall/onehome-mcp/issues/206)) ([76a96a7](https://github.com/chrischall/onehome-mcp/commit/76a96a7a95f8cb291b3b0ff916d044d3479de049))
+* **deps:** upgrade @chrischall/mcp-utils to 2.4.0 and @fetchproxy/* to 3.2.0 ([#205](https://github.com/chrischall/onehome-mcp/issues/205)) ([c9ff9f0](https://github.com/chrischall/onehome-mcp/commit/c9ff9f0ead1b04511aa7fb6192732e359cedc02f))
+
 ## [1.1.0](https://github.com/chrischall/onehome-mcp/compare/v1.0.0...v1.1.0) (2026-09-19)
 
 
