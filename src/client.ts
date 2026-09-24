@@ -222,26 +222,42 @@ export class OneHomeClient {
 
   /**
    * Pick a transport for a request by inspecting its variables for
-   * `~MLS`-suffixed listing ids. Falls back to the active session when
-   * nothing matches.
+   * `~MLS`-suffixed listing ids.
+   *
+   * - The active session wins whenever its MLS matches the suffix, so
+   *   `onehome_set_active_session` selects between two shares in the
+   *   same MLS (two agents in CANOPY, or one agent's two searches).
+   * - Otherwise, when exactly one registered session matches, the
+   *   request is routed to it.
+   * - When several non-active sessions match, the choice is ambiguous:
+   *   throw and name the candidates rather than silently picking the
+   *   first-registered one.
+   * - No suffix, or no match: the active session answers.
    */
   private routeFor(variables?: Record<string, unknown>): OneHomeTransport {
-    if (this.sessions.size > 1) {
-      const mls = extractRoutingMls(variables);
-      if (mls) {
-        for (const [, transport] of this.sessions) {
-          const ctxMls = transport.status().sessionContext.mlsId;
-          if (ctxMls && ctxMls.toUpperCase() === mls.toUpperCase()) {
-            return transport;
-          }
-        }
-      }
-    }
     const active = this.sessions.get(this.activeSessionId);
     if (!active) {
       throw new Error(
         `OneHomeClient: active session "${this.activeSessionId}" is not registered.`
       );
+    }
+    if (this.sessions.size > 1) {
+      const mls = extractRoutingMls(variables);
+      if (mls) {
+        const want = mls.toUpperCase();
+        const matches = (t: OneHomeTransport): boolean =>
+          t.status().sessionContext.mlsId?.toUpperCase() === want;
+        if (matches(active)) return active;
+        const candidates = Array.from(this.sessions.entries()).filter(([, t]) => matches(t));
+        if (candidates.length === 1) return candidates[0]![1];
+        if (candidates.length > 1) {
+          throw new Error(
+            `OneHomeClient: ambiguous routing for ~${mls} — sessions ` +
+              `${candidates.map(([id]) => id).join(', ')} are all in that MLS. ` +
+              'Call onehome_set_active_session with the one you mean, then retry.'
+          );
+        }
+      }
     }
     return active;
   }
@@ -291,7 +307,9 @@ export class OneHomeClient {
    * plain `Error` if the response shape was unexpected.
    *
    * Routing: when multiple sessions are registered and the request
-   * carries a `~MLS`-suffixed listing id, that session is preferred;
+   * carries a `~MLS`-suffixed listing id, the active session answers if
+   * it is in that MLS, else the single matching session (ambiguity
+   * throws — see `routeFor`);
    * otherwise the active session answers.
    */
   async graphql<T = unknown>(req: GraphQLRequest): Promise<T> {

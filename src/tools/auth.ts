@@ -67,7 +67,7 @@ export function registerAuthTools(
     {
       title: 'Switch which registered OneHome session is active',
       description:
-        'Force a specific registered session to be the active one. Useful when MLS-suffix routing picks the wrong session (e.g. a free-text search across multiple MLSes, or a listing without a `~MLS` suffix). Pass a `session_id` previously returned by `onehome_set_auth` or surfaced in `onehome_get_session_context`. The active session answers any request that doesn\'t carry a `~MLS`-suffixed listing id.',
+        'Force a specific registered session to be the active one. Useful when MLS-suffix routing picks the wrong session (e.g. two shares in the same MLS, a free-text search across multiple MLSes, or a listing without a `~MLS` suffix). Pass a `session_id` previously returned by `onehome_set_auth` or surfaced in `onehome_get_session_context`. The active session answers any request without a `~MLS`-suffixed listing id AND any `~MLS` request whose MLS matches its own; a `~MLS` id matching several other sessions errors until you pick one here.',
       annotations: {
         title: 'Switch which registered OneHome session is active',
         readOnlyHint: false,
