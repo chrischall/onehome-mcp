@@ -135,3 +135,75 @@ describe('per-listing session context defaults (multi-session routing)', () => {
     expect(hcaor.calls[0]?.variables).toMatchObject({ groupId: 'G-HCAOR' });
   });
 });
+
+/**
+ * Regression for chrischall/fleet-audit#952: two shares in the SAME MLS
+ * (e.g. two agents in CANOPY). The first-registered session used to win
+ * every `~CANOPY` lookup, so onehome_set_active_session could not
+ * select the second share for suffixed listing ids.
+ */
+describe('duplicate-MLS sessions', () => {
+  function twoCanopy(): {
+    client: OneHomeClient;
+    a: FakeTransport;
+    b: FakeTransport;
+    hcaor: FakeTransport;
+    bId: string;
+    hcaorId: string;
+  } {
+    const mk = (group: string, mls = 'CANOPY') => {
+      const t = new FakeTransport();
+      t.setStatus({
+        sessionContext: {
+          mlsId: mls,
+          groupId: group,
+          savedSearchId: `S-${group}`,
+        } as BridgeStatus['sessionContext'],
+      });
+      t.on('ListingById', (v) => ok({ listingDetail: listing(v.listingId as string) }));
+      return t;
+    };
+    const a = mk('G-A');
+    const b = mk('G-B');
+    const hcaor = mk('G-H', 'HCAOR');
+    const client = new OneHomeClient({ transport: a });
+    const bId = client.registerSession(b);
+    const hcaorId = client.registerSession(hcaor);
+    return { client, a, b, hcaor, bId, hcaorId };
+  }
+
+  it('routes a matching ~MLS id to the ACTIVE session when it matches', () => {
+    const { client, bId } = twoCanopy();
+    client.setActiveSession(bId);
+    expect(client.sessionContextFor('xyz~CANOPY').groupId).toBe('G-B');
+    expect(client.sessionContextFor('xyz~canopy').groupId).toBe('G-B');
+  });
+
+  it('onehome_get_property honours onehome_set_active_session for the second same-MLS share', async () => {
+    const { client, a, b, bId } = twoCanopy();
+    client.setActiveSession(bId);
+    await call(client, registerPropertyTools, 'onehome_get_property', {
+      listing_id: 'xyz~CANOPY',
+    });
+    expect(a.calls).toHaveLength(0);
+    expect(b.calls[0]?.variables).toMatchObject({ groupId: 'G-B', savedSearchId: 'S-G-B' });
+  });
+
+  it('fails loudly, naming the candidates, when the active session does not match and several do', async () => {
+    const { client, a, b, hcaorId } = twoCanopy();
+    client.setActiveSession(hcaorId);
+    expect(() => client.sessionContextFor('xyz~CANOPY')).toThrow(/session-1.*session-2/);
+    expect(() => client.sessionContextFor('xyz~CANOPY')).toThrow(/onehome_set_active_session/);
+    await expect(
+      client.graphql({ operationName: 'ListingById', query: 'q', variables: { listingId: 'xyz~CANOPY' } })
+    ).rejects.toThrow(/ambiguous/i);
+    expect(a.calls).toHaveLength(0);
+    expect(b.calls).toHaveLength(0);
+  });
+
+  it('still routes away from the active session when exactly one other session matches', () => {
+    const { client } = twoCanopy();
+    // session-1 (CANOPY, G-A) is active; ~HCAOR has one match.
+    expect(client.sessionContextFor('xyz~HCAOR').groupId).toBe('G-H');
+  });
+});

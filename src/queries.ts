@@ -157,7 +157,6 @@ query GetOneHomeUser {
       emails
       contactStatus
       createdAt
-      shareToken
       agent {
         id
         firstName

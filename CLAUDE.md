@@ -14,7 +14,7 @@ So onehome-mcp departs from the Pattern A / Pattern B fetchproxy split the other
 
 Once the bearer is acquired we don't route subsequent calls through fetchproxy — there's no anti-bot challenge to dodge at `services.onehome.com`, so the round-trip through the tab would just add latency and a bridge-down failure mode.
 
-**Multi-session.** `OneHomeClient` keeps a *registry* of transports keyed by `session_id`, one marked active (the single-session case is just a one-entry registry). A buyer holding shares across multiple agents/MLSes adds each via `onehome_set_auth`; per-request routing prefers the session whose `sessionContext.mlsId` matches a listing's `~MLS` OSK suffix (`~CANOPY`, `~HCAOR`, …), else the active session answers. Switch the default with `onehome_set_active_session(session_id)`. See `src/client.ts` for the routing rule.
+**Multi-session.** `OneHomeClient` keeps a *registry* of transports keyed by `session_id`, one marked active (the single-session case is just a one-entry registry). A buyer holding shares across multiple agents/MLSes adds each via `onehome_set_auth`; per-request routing for a listing's `~MLS` OSK suffix (`~CANOPY`, `~HCAOR`, …) uses the active session when its `sessionContext.mlsId` matches, else the single matching session; several non-active matches (two shares in one MLS) throw and name the candidates. No suffix / no match → the active session answers. Switch the default with `onehome_set_active_session(session_id)`. See `src/client.ts` for the routing rule.
 
 ## Tool surface
 
@@ -40,7 +40,7 @@ Once the bearer is acquired we don't route subsequent calls through fetchproxy �
 | `onehome_calculate_affordability` | `tools/affordability.ts` | — | no (local) |
 | `onehome_healthcheck` | `tools/healthcheck.ts` | `GetSavedSearchBySearchId` when session context has one; else `GetOneHomeUser` | yes |
 | `onehome_set_auth` | `tools/auth.ts` | (local — `parseAuthInput` → new `DirectTransport` → POST `/api/authentication/checkToken` if email-token; **registers** the resolved bearer as a new session and marks it active) | no (it's how you *acquire* auth) |
-| `onehome_set_active_session` | `tools/auth.ts` | (local — `client.setActiveSession(session_id)`; force which registered session answers non-`~MLS`-routed requests) | no |
+| `onehome_set_active_session` | `tools/auth.ts` | (local — `client.setActiveSession(session_id)`; force which registered session answers unsuffixed requests and wins `~MLS` routing within its own MLS) | no |
 
 ## Architecture
 

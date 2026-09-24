@@ -27,7 +27,6 @@ interface RawUserGroup {
   emails?: string[];
   contactStatus?: string;
   createdAt?: string;
-  shareToken?: string;
   agent?: RawUserAgent;
 }
 
@@ -201,7 +200,7 @@ export function registerUserTools(
     {
       title: "Inspect every registered OneHome session",
       description:
-        "Returns one entry per registered session — its `session_id`, auth_mode, token expiry, and session scope (group_id / saved_search_id / agent_id / contact_id / mls_id) the MCP bootstrapped from each checkToken exchange. `active_session_id` flags which session answers by default; per-listing routing prefers the session whose `mls_id` matches the listing's `~MLS` suffix. Tools default unspecified `group_id` / `saved_search_id` arguments from the active session's context, so this is the easiest way to see what they'll default to. Single-session use (the common case) returns a one-entry `sessions[]`.",
+        "Returns one entry per registered session — its `session_id`, auth_mode, token expiry, and session scope (group_id / saved_search_id / agent_id / contact_id / mls_id) the MCP bootstrapped from each checkToken exchange. `active_session_id` flags which session answers by default; per-listing routing uses the active session when its `mls_id` matches the listing's `~MLS` suffix, else the one session that matches (several matches error — pick one with `onehome_set_active_session`). Tools default unspecified `group_id` / `saved_search_id` arguments from the active session's context, so this is the easiest way to see what they'll default to. Single-session use (the common case) returns a one-entry `sessions[]`.",
       annotations: {
         title: "Inspect every registered OneHome session",
         readOnlyHint: true,
