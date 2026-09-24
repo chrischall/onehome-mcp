@@ -18,6 +18,12 @@ describe('query builders', () => {
     expect(req.query).toContain('agent {');
   });
 
+  it('GetOneHomeUser does not request group shareTokens (fleet-audit#1174)', () => {
+    // The share token is the credential onehome_set_auth exchanges; no
+    // curated tool emits it, so it must not be fetched at all.
+    expect(buildGetOneHomeUser().query).not.toMatch(/shareToken/);
+  });
+
   it('GetSavedSearchBySearchId passes the search id', () => {
     const req = buildGetSavedSearchBySearchId('ss-1');
     expect(req.variables?.searchId).toBe('ss-1');

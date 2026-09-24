@@ -27,7 +27,6 @@ interface RawUserGroup {
   emails?: string[];
   contactStatus?: string;
   createdAt?: string;
-  shareToken?: string;
   agent?: RawUserAgent;
 }
 
