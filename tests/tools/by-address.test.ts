@@ -670,6 +670,49 @@ describe('onehome_get_by_address — search-fallback rung', () => {
     expect(result.matched_via).toBe('search_fallback');
   });
 
+  // realty-core <=0.4.2 ignored directionals, so "126 N Bear Ln" matched
+  // the only pool listing, 126 S Bear Ln, with a perfect score and the tool
+  // resolved to the wrong house. 0.4.8 treats N vs S as a different street.
+  it('rejects the opposite-directional "126 S Bear Ln" for "126 N Bear Ln" (realty-core 0.4.8)', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['S'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'S',
+              property: {
+                StreetNumber: '126',
+                StreetDirPrefix: 'S',
+                StreetName: 'Bear',
+                StreetSuffix: 'Ln',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '126 N Bear Ln',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.listing_id).not.toBe('S');
+    expect(result.resolved).toBe(false);
+  });
+
   // realty-core 0.4.7 anchored on EVERY number, so the unit id "5" in
   // "Apt 5" had to appear in the listing's street line and the right house
   // was hard-rejected. 0.4.8 strips the unit designator before matching.
