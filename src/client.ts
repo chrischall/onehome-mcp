@@ -13,11 +13,21 @@
  * unless a per-request routing hint matches another session's MLS.
  *
  * Routing rule: when a GraphQL request's variables include a
- * `listingId` (or `osks[]` / `listingIds[]`) carrying a `~MLS` suffix
- * (OneHome's OSKs end with `~CANOPY`, `~HCAOR`, …), and one of the
- * registered sessions reports a matching `sessionContext.mlsId`, the
- * request is routed to that session. Otherwise it goes to the active
- * one.
+ * `listingId` / `id` (or `osks[]` / `listingIds[]`) carrying an
+ * upper-case `~MLS` suffix (OneHome's OSKs end with `~CANOPY`,
+ * `~HCAOR`, …), the suffix is compared case-insensitively with each
+ * session's `sessionContext.mlsId`:
+ *
+ * - if the active session's MLS matches, the active session answers —
+ *   so `onehome_set_active_session` picks between two shares in the
+ *   same MLS;
+ * - otherwise, if exactly one registered session matches, the request
+ *   is routed to it;
+ * - if several non-active sessions match, routing is ambiguous and the
+ *   request throws, naming the candidates.
+ *
+ * No suffix, or no matching session: the active session answers. See
+ * `routeFor` for the implementation.
  */
 
 import { parseAuthInput } from './auth.js';
