@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/chrischall/onehome-mcp/compare/v1.1.2...v1.1.3) (2026-09-25)
+
+
+### Bug Fixes
+
+* **deps:** take realty-core 0.4.8 address matching (wrong house, unit numbers) ([#216](https://github.com/chrischall/onehome-mcp/issues/216)) ([7672872](https://github.com/chrischall/onehome-mcp/commit/7672872761a8f09020a566c95bec4de3da4998df))
+* **session:** let onehome_set_active_session pick between shares in the same MLS ([#212](https://github.com/chrischall/onehome-mcp/issues/212)) ([c1bbc02](https://github.com/chrischall/onehome-mcp/commit/c1bbc02661b8c4bc7fad61f24486fbb406a6df36))
+
 ## [1.1.2](https://github.com/chrischall/onehome-mcp/compare/v1.1.1...v1.1.2) (2026-09-23)
 
 
