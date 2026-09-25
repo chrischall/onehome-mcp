@@ -670,6 +670,49 @@ describe('onehome_get_by_address — search-fallback rung', () => {
     expect(result.matched_via).toBe('search_fallback');
   });
 
+  // realty-core 0.4.7 anchored on EVERY number, so the unit id "5" in
+  // "Apt 5" had to appear in the listing's street line and the right house
+  // was hard-rejected. 0.4.8 strips the unit designator before matching.
+  it('matches a unit-bearing "126 Bear Ln Apt 5" against the street listing (realty-core 0.4.8)', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['A'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          listings: [
+            {
+              id: 'A',
+              property: {
+                StreetNumber: '126',
+                StreetName: 'Bear',
+                StreetSuffix: 'Ln',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      })
+    );
+    const result = await callBy(transport, {
+      address: '126 Bear Ln Apt 5',
+      city: 'Lake Lure',
+      state: 'NC',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('A');
+    expect(result.matched_via).toBe('search_fallback');
+  });
+
   it('flags matched_outside_saved_area when fallback hit lacks the input city', async () => {
     const transport = new FakeTransport();
     transport.setStatus({
