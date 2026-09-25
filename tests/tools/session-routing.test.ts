@@ -176,7 +176,34 @@ describe('duplicate-MLS sessions', () => {
     const { client, bId } = twoCanopy();
     client.setActiveSession(bId);
     expect(client.sessionContextFor('xyz~CANOPY').groupId).toBe('G-B');
-    expect(client.sessionContextFor('xyz~canopy').groupId).toBe('G-B');
+  });
+
+  it("matches a session's mlsId case-insensitively", () => {
+    // Active session is HCAOR, so a CANOPY hit can only come from the
+    // registry scan comparing against a lower-case reported mlsId.
+    const hcaor = new FakeTransport();
+    hcaor.setStatus({
+      sessionContext: { mlsId: 'HCAOR', groupId: 'G-H' } as BridgeStatus['sessionContext'],
+    });
+    const lower = new FakeTransport();
+    lower.setStatus({
+      sessionContext: { mlsId: 'canopy', groupId: 'G-lower' } as BridgeStatus['sessionContext'],
+    });
+    const client = new OneHomeClient({ transport: hcaor });
+    client.registerSession(lower);
+    expect(client.sessionContextFor('xyz~CANOPY').groupId).toBe('G-lower');
+  });
+
+  it('does not treat a lower-case ~mls suffix as a routing hint', () => {
+    // extractMlsSuffix only accepts upper-case MLS codes, so `~canopy`
+    // falls through to the active session even though a CANOPY session
+    // is registered.
+    const { client, hcaorId } = twoCanopy();
+    client.setActiveSession(hcaorId);
+    expect(client.sessionContextFor('xyz~canopy').groupId).toBe('G-H');
+    // Contrast: the upper-case suffix IS a hint — with two non-active
+    // CANOPY sessions it is ambiguous and throws instead of falling back.
+    expect(() => client.sessionContextFor('xyz~CANOPY')).toThrow(/ambiguous routing for ~CANOPY/);
   });
 
   it('onehome_get_property honours onehome_set_active_session for the second same-MLS share', async () => {
