@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.4](https://github.com/chrischall/onehome-mcp/compare/v1.1.3...v1.1.4) (2026-09-27)
+
+
+### Bug Fixes
+
+* **deps:** move to [@fetchproxy](https://github.com/fetchproxy) 3.4 for ContextMint Bridge errors, capability subsets and managed pins ([#218](https://github.com/chrischall/onehome-mcp/issues/218)) ([b935a56](https://github.com/chrischall/onehome-mcp/commit/b935a564e747d73145458420300d47d1d173d51b))
+* **deps:** move to @chrischall/mcp-utils 2.8 and [@fetchproxy](https://github.com/fetchproxy) 3.4.1 for clearer browser-bridge errors ([#222](https://github.com/chrischall/onehome-mcp/issues/222)) ([1adfd67](https://github.com/chrischall/onehome-mcp/commit/1adfd67b713b8cec4bf0e602fc896c8465799a18))
+
 ## [1.1.3](https://github.com/chrischall/onehome-mcp/compare/v1.1.2...v1.1.3) (2026-09-25)
 
 
