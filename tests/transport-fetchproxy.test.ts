@@ -10,6 +10,10 @@ import {
   type FetchproxyTransportOptions,
   CAPTURE_TIMEOUT_MS,
 } from '../src/transport-fetchproxy.js';
+import {
+  FetchproxyCapabilityUnavailableError,
+  FetchproxyHelloRejectedError,
+} from '@fetchproxy/server';
 
 // Adapter-level tests for the onehome FetchproxyTransport.
 //
@@ -159,6 +163,56 @@ describe('FetchproxyTransport — capture error surface (post-server-retry)', ()
     await expect(
       t.graphql({ operationName: 'X', query: 'query X { ok }' }),
     ).rejects.toBeInstanceOf(FetchproxyAuthCaptureError);
+  });
+
+  // @fetchproxy 3.3: a browser that cannot serve a capability (e.g. Safari)
+  // rejects with its own "this browser can't do that" remedy. Wrapping it in
+  // the "interact with the page within 120s" guidance would blame the user's
+  // tab for a browser limitation, so it must pass through untouched.
+  it('re-throws FetchproxyCapabilityUnavailableError unwrapped (browser limitation, not a capture timeout)', async () => {
+    captureBehavior = async () => {
+      throw new FetchproxyCapabilityUnavailableError('capability_unavailable', {
+        capability: 'capture_request_header',
+        platform: 'safari',
+      });
+    };
+    const t = newTransport({ version: '0.0.0-test' });
+    await t.start();
+    const err = await t
+      .graphql({ operationName: 'X', query: 'query X { ok }' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FetchproxyCapabilityUnavailableError);
+    expect(err).not.toBeInstanceOf(FetchproxyAuthCaptureError);
+    expect(err).toMatchObject({ platform: 'safari' });
+  });
+
+  it('re-throws FetchproxyHelloRejectedError unwrapped (carries its own remedy)', async () => {
+    captureBehavior = async () => {
+      throw new FetchproxyHelloRejectedError({
+        mcpId: 'onehome-mcp',
+        reason:
+          'unsupported-capability: capture_request_header (not available in this browser)',
+        platform: 'safari',
+      });
+    };
+    const t = newTransport({ version: '0.0.0-test' });
+    await t.start();
+    await expect(
+      t.graphql({ operationName: 'X', query: 'query X { ok }' }),
+    ).rejects.toBeInstanceOf(FetchproxyHelloRejectedError);
+  });
+
+  it('names ContextMint Bridge (not the old fetchproxy extension) in the capture guidance', async () => {
+    captureBehavior = async () => {
+      throw new Error('timeout: no matching request observed within 120000ms');
+    };
+    const t = newTransport({ version: '0.0.0-test' });
+    await t.start();
+    const err = await t
+      .graphql({ operationName: 'X', query: 'query X { ok }' })
+      .catch((e: unknown) => e as Error);
+    expect(err.message).toContain('ContextMint Bridge');
+    expect(err.message).not.toMatch(/fetchproxy browser extension|Transporter/);
   });
 
   // fleet-audit#11: a rejected capture must not be memoised. Before the fix,

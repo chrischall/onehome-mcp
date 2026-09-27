@@ -34,10 +34,12 @@ npm install -g @fetchproxy/cli                 # provides `fpx`
 fpx profile add onehome --domain onehome.com    # covers portal.* and services.*
 fpx profile declare onehome \
   --capture-header Authorization@services.onehome.com/graphql  # needed for Path B below
-fpx pair -p onehome                             # prints a pair code → approve in Transporter
+fpx pair -p onehome                             # prints a pair code → approve in ContextMint Bridge
 ```
 
-Requirements: the **Transporter** browser extension installed and paired,
+Requirements: the **ContextMint Bridge** browser extension installed
+(from https://github.com/nullnet-app/contextmint-bridge/releases — Chrome:
+load the chrome zip unpacked; Safari: ships inside the ContextMint app) and paired,
 its Chrome **Site access** allowing `onehome.com`, and (for Path B) an open
 `portal.onehome.com` tab signed in to the share you want to read.
 
