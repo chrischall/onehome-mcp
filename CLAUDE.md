@@ -147,7 +147,7 @@ ONEHOME_TOKEN=eyJ...                          # raw bearer JWT (preferred)
 ONEHOME_MAGIC_LINK=https://portal.onehome.com/en-US/properties/map?token=eyJ...
 ```
 
-Or omit both and let the MCP capture the bearer from a signed-in `portal.onehome.com` tab via the fetchproxy extension. The extension is installed separately (see https://github.com/chrischall/fetchproxy).
+Or omit both and let the MCP capture the bearer from a signed-in `portal.onehome.com` tab via the ContextMint Bridge browser extension, installed separately from https://github.com/nullnet-app/contextmint-bridge/releases (Chrome: load the chrome zip unpacked; Safari: ships inside the ContextMint app).
 
 Optional:
 

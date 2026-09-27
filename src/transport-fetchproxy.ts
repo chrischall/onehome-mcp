@@ -27,6 +27,11 @@ import {
   type FetchproxyServerOpts,
   type FetchproxyTransport as FetchproxyTransportAdapter,
 } from '@chrischall/mcp-utils/fetchproxy';
+import {
+  FetchproxyCapabilityUnavailableError,
+  FetchproxyHelloRejectedError,
+  FetchproxyProtocolVersionError,
+} from '@fetchproxy/server';
 import { decodeJwtExpiresAtMs, TokenExpiredError } from './auth.js';
 import type {
   BridgeStatus,
@@ -84,7 +89,7 @@ export class FetchproxyAuthCaptureError extends Error {
     super(
       `onehome-mcp could not capture an Authorization header from your ` +
         `signed-in portal.onehome.com tab within ${CAPTURE_TIMEOUT_MS / 1000}s. ` +
-        `Make sure: (a) the fetchproxy browser extension is installed and ` +
+        `Make sure: (a) the ContextMint Bridge browser extension is installed and ` +
         `paired, (b) you have portal.onehome.com open and signed in, and ` +
         `(c) you've interacted with the page (scrolled the map, clicked a ` +
         `pin, etc.) to trigger a GraphQL call. ` +
@@ -439,7 +444,19 @@ export class FetchproxyTransport implements OneHomeTransport {
       // SW eviction (with its own lazy-revive retry handled). Pass
       // those through untouched; wrap everything else as a
       // capture-mode error with onehome-specific guidance.
-      if (err instanceof FetchproxyBridgeDownError) throw err;
+      //
+      // @fetchproxy 3.3+: errors that already carry their own remedy pass
+      // through too — a browser that can't serve the capability (e.g.
+      // Safari), a refused hello, or a bridge protocol mismatch. Wrapping
+      // those in "interact with the page within 120s" would misdiagnose them.
+      if (
+        err instanceof FetchproxyBridgeDownError ||
+        err instanceof FetchproxyCapabilityUnavailableError ||
+        err instanceof FetchproxyHelloRejectedError ||
+        err instanceof FetchproxyProtocolVersionError
+      ) {
+        throw err;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       throw new FetchproxyAuthCaptureError(msg);
     }
