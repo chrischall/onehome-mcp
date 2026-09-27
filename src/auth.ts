@@ -90,7 +90,7 @@ export class NoTokenError extends Error {
     super(
       'onehome-mcp could not source an Authorization bearer token. ' +
         'Set ONEHOME_TOKEN (raw JWT), or ONEHOME_MAGIC_LINK (portal URL with ?token=...), ' +
-        'or run with the fetchproxy browser extension connected to a signed-in portal.onehome.com tab. ' +
+        'or run with the ContextMint Bridge browser extension connected to a signed-in portal.onehome.com tab. ' +
         'You can also set the bearer at runtime via the `onehome_set_auth` tool — pass the magic-link URL or the JWT directly.'
     );
     this.name = 'NoTokenError';

@@ -7,6 +7,7 @@ import {
   exchangeEmailToken,
   extractTokenFromMagicLink,
   isJwtShape,
+  NoTokenError,
   parseAuthInput,
   TokenExpiredError,
 } from '../src/auth.js';
@@ -210,5 +211,15 @@ describe('exchangeEmailToken deadline + classification (issue #55)', () => {
     });
     expect(res.sessionToken).toBe('jwt-xyz');
     expect(res.groupID).toBe('g1');
+  });
+});
+
+describe('NoTokenError', () => {
+  it('points at ContextMint Bridge (not the old fetchproxy extension) as the capture path', () => {
+    const msg = new NoTokenError().message;
+    expect(msg).toContain(
+      'or run with the ContextMint Bridge browser extension connected to a signed-in portal.onehome.com tab'
+    );
+    expect(msg).not.toMatch(/fetchproxy browser extension|Transporter/);
   });
 });

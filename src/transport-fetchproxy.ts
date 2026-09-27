@@ -2,7 +2,7 @@
  * fetchproxy transport for onehome-mcp.
  *
  * Used when neither `ONEHOME_TOKEN` nor `ONEHOME_MAGIC_LINK` is set.
- * The user is expected to have the fetchproxy browser extension
+ * The user is expected to have the ContextMint Bridge browser extension
  * installed and a signed-in `portal.onehome.com` tab open.
  *
  * The first time we need a token we ask fetchproxy to snapshot the

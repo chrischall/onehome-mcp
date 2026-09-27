@@ -86,7 +86,7 @@ function hintFor(args: {
     return 'GraphQL came back with errors — inspect `error.message` for the upstream message. Common cause: the session has a different access scope than expected (consumer vs agent).';
   }
   if (args.mode === 'fetchproxy_capture') {
-    return 'Auth-capture mode: make sure the fetchproxy browser extension is installed and paired, you have portal.onehome.com signed in, and interact with the page (move the map, click a pin, etc.) to trigger a GraphQL call that we can capture the Authorization header from.';
+    return 'Auth-capture mode: make sure the ContextMint Bridge browser extension is installed and paired, you have portal.onehome.com signed in, and interact with the page (move the map, click a pin, etc.) to trigger a GraphQL call that we can capture the Authorization header from.';
   }
   return 'GraphQL round-trip failed. Refresh ONEHOME_TOKEN / ONEHOME_MAGIC_LINK and retry; if it keeps failing, run `onehome_graphql` to inspect the raw error envelope.';
 }
