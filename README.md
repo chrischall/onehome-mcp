@@ -20,7 +20,9 @@ So instead of routing every fetch through your signed-in browser tab (like the o
 | --- | --- | --- |
 | `env_token` | `ONEHOME_TOKEN=<jwt>` | Paste the raw bearer from devtools Network panel. Most direct. |
 | `magic_link` | `ONEHOME_MAGIC_LINK=https://portal.onehome.com/...?token=...` | Paste the full URL your agent sent — we extract the `token` param. |
-| `fetchproxy_capture` | (no env) + [ContextMint Bridge](https://github.com/nullnet-app/contextmint-bridge/releases) browser extension installed (Chrome: load the release's chrome zip unpacked; Safari: ships inside the ContextMint app) + signed-in `portal.onehome.com` tab | We wait for your tab to fire any GraphQL request, snapshot the Authorization header, and reuse it. |
+| `fetchproxy_capture` | (no env) + [ContextMint Bridge](https://github.com/nullnet-app/contextmint-bridge/releases) browser extension installed (Chrome: load the release's chrome zip unpacked; Safari isn't available yet — it will ship inside the ContextMint app, so use Chrome for now) + signed-in `portal.onehome.com` tab | We wait for your tab to fire any GraphQL request, snapshot the Authorization header, and reuse it. |
+
+ContextMint Bridge is the fetchproxy browser extension under its new name, from the same maintainer — fetchproxy's own README ([fetchproxy#extension](https://github.com/chrischall/fetchproxy#extension)) points to it. Its source is public at [nullnet-app/contextmint-bridge](https://github.com/nullnet-app/contextmint-bridge): build it yourself, or check a release zip against the `.sha256` file published beside it (`shasum -a 256 -c contextmint-bridge-chrome-<version>.zip.sha256`).
 
 ## Tools
 

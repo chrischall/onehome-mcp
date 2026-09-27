@@ -39,9 +39,10 @@ fpx pair -p onehome                             # prints a pair code → approve
 
 Requirements: the **ContextMint Bridge** browser extension installed
 (from https://github.com/nullnet-app/contextmint-bridge/releases — Chrome:
-load the chrome zip unpacked; Safari: ships inside the ContextMint app) and paired,
+load the chrome zip unpacked; Safari is not available yet, so use Chrome for now) and paired,
 its Chrome **Site access** allowing `onehome.com`, and (for Path B) an open
 `portal.onehome.com` tab signed in to the share you want to read.
+ContextMint Bridge is the fetchproxy extension renamed, same maintainer (see https://github.com/chrischall/fetchproxy#extension); source at https://github.com/nullnet-app/contextmint-bridge — build it or verify the release zip with `shasum -a 256 -c contextmint-bridge-chrome-<version>.zip.sha256`.
 
 ## Getting a bearer token (two paths)
 
