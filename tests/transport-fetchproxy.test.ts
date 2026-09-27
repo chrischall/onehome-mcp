@@ -13,6 +13,7 @@ import {
 import {
   FetchproxyCapabilityUnavailableError,
   FetchproxyHelloRejectedError,
+  FetchproxyProtocolVersionError,
 } from '@fetchproxy/server';
 
 // Adapter-level tests for the onehome FetchproxyTransport.
@@ -200,6 +201,27 @@ describe('FetchproxyTransport — capture error surface (post-server-retry)', ()
     await expect(
       t.graphql({ operationName: 'X', query: 'query X { ok }' }),
     ).rejects.toBeInstanceOf(FetchproxyHelloRejectedError);
+  });
+
+  // A bridge protocol mismatch names both versions and says which side to
+  // update. Wrapping it in "interact with the page within 120s" would hide
+  // that remedy behind a capture-timeout diagnosis.
+  it('re-throws FetchproxyProtocolVersionError unwrapped (version mismatch, not a capture timeout)', async () => {
+    captureBehavior = async () => {
+      throw new FetchproxyProtocolVersionError({
+        ourVersion: 3,
+        theirVersion: 2,
+        peer: 'extension',
+      });
+    };
+    const t = newTransport({ version: '0.0.0-test' });
+    await t.start();
+    const err = await t
+      .graphql({ operationName: 'X', query: 'query X { ok }' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FetchproxyProtocolVersionError);
+    expect(err).not.toBeInstanceOf(FetchproxyAuthCaptureError);
+    expect(err).toMatchObject({ ourVersion: 3, theirVersion: 2, peer: 'extension' });
   });
 
   it('names ContextMint Bridge (not the old fetchproxy extension) in the capture guidance', async () => {
