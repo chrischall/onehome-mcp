@@ -59,6 +59,8 @@ async function callByAddress(
   return JSON.parse(first.text);
 }
 
+import { OneHomeRequestTimeoutError } from '../../src/request-deadline.js';
+
 describe('onehome_resolve_addresses', () => {
   it('returns one row per input address with the resolved listing', async () => {
     const transport = new FakeTransport();
@@ -410,6 +412,61 @@ describe('onehome_resolve_addresses', () => {
     expect(result.rows?.[1]?.query).toBeDefined();
     expect(result.rows?.[0]?.resolved).toBe(true);
     expect(result.rows?.[2]?.resolved).toBe(true);
+  });
+
+  it('retries a OneHomeRequestTimeoutError row once and flags it a retryable timeout, not a miss (fleet-audit#1078)', async () => {
+    const transport = new FakeTransport();
+    let attempts = 0;
+    transport.on('ListingSuggestionsSearch', (vars) => {
+      const q = vars.browseParameter as string;
+      if (q.includes('stall')) {
+        attempts++;
+        throw new OneHomeRequestTimeoutError('OneHome GraphQL ListingSuggestionsSearch', 25_000);
+      }
+      return ok({
+        listingSuggestionsSearch: [{ id: 'OK', city: 'X', stateOrProvince: 'NY' }],
+      });
+    });
+    const result = await callResolve(transport, {
+      addresses: [{ address: '1 Good St' }, { address: '2 stall Ave' }],
+    });
+    expect(attempts).toBe(2);
+    expect(result.rows?.[1]).toMatchObject({
+      resolved: false,
+      error_kind: 'timeout',
+      retryable: true,
+    });
+    expect(result.rows?.[1]?.query).toBeDefined();
+    expect(result.rows?.[0]?.resolved).toBe(true);
+    expect(result.rows?.[0]).not.toHaveProperty('error_kind');
+  });
+
+  it('returns partial rows with retryable pending markers when the overall deadline fires (fleet-audit#1091)', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingSuggestionsSearch', (vars) => {
+      const q = vars.browseParameter as string;
+      if (q.includes('hang')) return new Promise(() => {});
+      return ok({
+        listingSuggestionsSearch: [{ id: 'OK', city: 'X', stateOrProvince: 'NY' }],
+      });
+    });
+    const client = new OneHomeClient({ transport });
+    harness = await createTestHarness((server) =>
+      registerResolveAddressesTools(server, client, { overallDeadlineMs: 150 })
+    );
+    const r = await harness.callTool('onehome_resolve_addresses', {
+      addresses: [{ address: '1 Good St' }, { address: '2 hang Ave' }],
+    });
+    const first = r.content[0]!;
+    const result = JSON.parse(first.type === 'text' ? first.text : '{}');
+    expect(result.pending).toBe(1);
+    expect(result.rows[1]).toMatchObject({
+      resolved: false,
+      status: 'pending',
+      error_kind: 'pending',
+      retryable: true,
+    });
+    expect(result.rows[0].resolved).toBe(true);
   });
 
   it('caps concurrency to avoid swamping the upstream', async () => {

@@ -377,7 +377,12 @@ export function formatListing(
   }
   // hoa_monthly_usd is always present — `null` for unknown frequency or
   // missing fee. (Issue #15.)
-  out.hoa_monthly_usd = hoaToMonthlyUsd(p.AssociationFee, p.AssociationFeeFrequency);
+  // realty-core >= 0.5 never writes to the console (fleet-audit#664); keep
+  // onehome's stderr breadcrumb for frequency vocabulary we don't know.
+  out.hoa_monthly_usd = hoaToMonthlyUsd(p.AssociationFee, p.AssociationFeeFrequency, {
+    onUnknownFrequency: (raw) =>
+      console.error(`[onehome-mcp] unknown HOA frequency "${raw}"`),
+  });
   // tax_annual: low values are not-yet-assessed placeholders (new
   // construction). The canonical realty-core `cleanTaxAnnual` nulls them
   // out and returns the assessment status; onehome adopts its wider

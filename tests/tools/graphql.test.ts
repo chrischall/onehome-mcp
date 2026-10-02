@@ -134,4 +134,19 @@ describe('onehome_graphql — read-only enforcement', () => {
     expect(r.isError).toBe(false);
     expect(r.calls).toBe(1);
   });
+
+  // mcp-utils' shared lexer (fleet-audit#1080) refuses what it cannot
+  // prove read-only, rather than forwarding it upstream.
+  it.each([
+    ['an empty document', ''],
+    ['a comment-only document', '# just a comment'],
+    ['an unterminated string', 'query Op { a(s: "mutation { x }) }'],
+    ['unbalanced braces', 'query Op { a'],
+    ['a BOM-prefixed mutation', '\uFEFFmutation Op { x }'],
+  ])('rejects %s without sending it upstream', async (_label, query) => {
+    const r = await call(query);
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/read-only/i);
+    expect(r.calls).toBe(0);
+  });
 });

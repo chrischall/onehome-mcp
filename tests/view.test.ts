@@ -97,3 +97,10 @@ describe('viewArg', () => {
     expect(viewArg().description).toContain('compact');
   });
 });
+
+describe('shared realty-core view helpers (fleet-audit#1175)', () => {
+  it('OH_VIEWS is realty-core REALTY_VIEWS', async () => {
+    const { REALTY_VIEWS } = await import('@chrischall/realty-core');
+    expect(OH_VIEWS).toBe(REALTY_VIEWS);
+  });
+});

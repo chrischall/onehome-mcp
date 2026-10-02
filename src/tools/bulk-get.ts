@@ -1,26 +1,22 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
+import { runBoundedBatch } from '@chrischall/mcp-utils';
 import {
-  mapWithConcurrency,
   retryOnceOnTimeout,
   classifyRowError,
   BRIDGE_CONCURRENCY,
 } from '@chrischall/mcp-utils/fetchproxy';
+import { runRowBatch } from '@chrischall/realty-core';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { fetchListingDetail } from './properties.js';
-import { formatListing, type FormattedListing } from '../format.js';
+import { formatListing } from '../format.js';
 
 // Max input listing_ids per call; sized to cover a full consumer saved-search share.
 // Concurrent fan-out is bounded by `BRIDGE_CONCURRENCY` (=6) so a 200-id
 // batch trickles through the bridge instead of swamping it.
 export const BULK_GET_MAX = 200;
 
-interface BulkGetRow {
-  listing_id: string;
-  property?: FormattedListing;
-  error?: string;
-}
 
 export function registerBulkGetTools(
   server: McpServer,
@@ -33,9 +29,12 @@ export function registerBulkGetTools(
       description:
         `Fetch up to ${BULK_GET_MAX} OneHome listings in a single call. Returns one structured row per input id ` +
         '(no side-by-side summary table — use `onehome_compare_properties` for that). Each row is either ' +
-        '`{ listing_id, property }` on success or `{ listing_id, error }` on failure — one bad id never fails the ' +
-        'whole call. Calls fan out concurrently against `ListingById`, capped at 6 in flight to avoid swamping the ' +
-        'bridge; transient bridge timeouts are retried once per row before being captured as an error. ' +
+        '`{ listing_id, status: "ok", property }` on success or `{ listing_id, status, error_kind, retryable, error }` on failure ' +
+        '(`status` = `error_kind`: `timeout` / `bridge_down` / `pending` are retryable, `protocol` / `other` are real misses) — ' +
+        'one bad id never fails the whole call. Calls fan out concurrently against `ListingById`, capped at 6 in flight to avoid ' +
+        'swamping the bridge; transient timeouts are retried once per row before being captured as an error. The whole call is ' +
+        'bounded by an overall deadline: any row still unsettled comes back `status: "pending"` with a top-level `pending` count — ' +
+        're-run just those ids. The envelope reports `count` / `ok` / `errored`. ' +
         '`extracted_features` is populated per row ' +
         'automatically. The raw `description` (PublicRemarks) is omitted by default — pass `include_description: true` ' +
         'to keep it. `group_id` defaults to the magic-link session context.',
@@ -70,33 +69,36 @@ export function registerBulkGetTools(
       const groupId = i.group_id;
       const savedSearchId = i.saved_search_id;
       const includeDescription = i.include_description ?? false;
-      const rows = await mapWithConcurrency(
+      // realty-core `runRowBatch` (fleet-audit#1091): bounded (6 in flight)
+      // and now deadline-bounded (45s, onehome BUG-4) fan-out, one
+      // input-ordered row per id, `pending` backfill, and error rows with
+      // `status` = `error_kind` + `retryable`. mcp-utils >= 2.12's
+      // retryOnceOnTimeout / classifyRowError recognise onehome's own
+      // OneHomeRequestTimeoutError, so a stalled upstream row is retried
+      // once and reported as a retryable `timeout`, not a generic miss
+      // (fleet-audit#1078).
+      const envelope = await runRowBatch(
         i.listing_ids,
-        BRIDGE_CONCURRENCY,
         async (id) => {
-          const row: BulkGetRow = { listing_id: id };
-          try {
-            const { listingId, raw } = await retryOnceOnTimeout(() =>
-              fetchListingDetail(client, {
-                group_id: groupId,
-                listing_id: id,
-                saved_search_id: savedSearchId,
-              })
-            );
-            row.property = formatListing(listingId, raw, {
-              includeDescription,
-            });
-          } catch (err) {
-            row.error = classifyRowError(err).message;
-          }
-          return row;
+          const { listingId, raw } = await fetchListingDetail(client, {
+            group_id: groupId,
+            listing_id: id,
+            saved_search_id: savedSearchId,
+          });
+          return { property: formatListing(listingId, raw, { includeDescription }) };
+        },
+        {
+          kit: { runBoundedBatch, classifyRowError, retryOnceOnTimeout },
+          toolLabel: 'onehome_bulk_get',
+          rowBase: (id) => ({ listing_id: id }),
+          concurrency: BRIDGE_CONCURRENCY,
+          resultsKey: 'rows',
         }
       );
       const reportedGroupId = groupId ?? client.sessionContextFor().groupId;
       return minifiedResult({
         ...(reportedGroupId ? { group_id: reportedGroupId } : {}),
-        count: rows.length,
-        rows,
+        ...envelope,
       });
     }
   );

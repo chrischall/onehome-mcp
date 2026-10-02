@@ -21,10 +21,10 @@
 // JSON API that accepts direct connections — once auth is sorted
 // there's no anti-bot challenge to dodge.
 
-import { runMcp, readEnvVar, loadDotenvSafely } from '@chrischall/mcp-utils';
+import { runMcp, loadDotenvSafely } from '@chrischall/mcp-utils';
 import { OneHomeClient } from './client.js';
 import { tryBuildDirectTransportFromEnv } from './transport-direct.js';
-import { FetchproxyTransport } from './transport-fetchproxy.js';
+import { FetchproxyTransport, wsPortFromEnv } from './transport-fetchproxy.js';
 import { registerUserTools } from './tools/user.js';
 import { registerSavedTools } from './tools/saved.js';
 import { registerSavedWithListingsTools } from './tools/saved-with-listings.js';
@@ -49,8 +49,7 @@ const VERSION = '1.1.4'; // x-release-please-version
 // inside an mcpb bundle where creds arrive via the host's mcp_config.env.
 await loadDotenvSafely();
 
-const wsPort = readEnvVar('ONEHOME_WS_PORT');
-const port = wsPort ? Number(wsPort) : undefined;
+const port = wsPortFromEnv();
 
 const direct = tryBuildDirectTransportFromEnv(process.env);
 let transport: OneHomeTransport;

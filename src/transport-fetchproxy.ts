@@ -20,7 +20,7 @@
  * mode for no benefit.
  */
 
-import { detectEdgeBlock, EdgeBlockedError } from '@chrischall/mcp-utils';
+import { detectEdgeBlock, EdgeBlockedError, readPortEnv, type EnvSource } from '@chrischall/mcp-utils';
 import {
   createFetchproxyTransport,
   FetchproxyServer,
@@ -64,6 +64,20 @@ const USER_AGENT =
  * clears it — the value was declared here and served as 30 s for as long as
  * this file has existed (#178).
  */
+/**
+ * The fetchproxy WebSocket port from `ONEHOME_WS_PORT`, validated by
+ * mcp-utils' `readPortEnv` (fleet-audit#1081): an integer in 1..65535, with
+ * blank / `undefined` / unsubstituted `${…}` placeholders treated as unset.
+ * Anything else yields `undefined`, so the server falls back to
+ * fetchproxy's own default (`FETCHPROXY_WS_PORT`, else 37149) instead of
+ * being handed `NaN` (the old `Number(env)`).
+ */
+export function wsPortFromEnv(env: EnvSource = process.env): number | undefined {
+  // 0 is outside readPortEnv's valid range, so it can only mean "no port".
+  const port = readPortEnv('ONEHOME_WS_PORT', 0, { env });
+  return port === 0 ? undefined : port;
+}
+
 export const CAPTURE_TIMEOUT_MS = 120_000;
 
 /**

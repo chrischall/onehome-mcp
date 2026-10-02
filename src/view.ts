@@ -1,4 +1,5 @@
-import { minifiedResult, resolveView, stripMediaUrls, viewParam, type View } from '@chrischall/mcp-utils';
+import * as mcpUtils from '@chrischall/mcp-utils';
+import { makeViewHelpers, REALTY_VIEWS } from '@chrischall/realty-core';
 
 /**
  * The rungs this server honours (`@chrischall/mcp-utils`' `view` vocabulary;
@@ -20,12 +21,7 @@ import { minifiedResult, resolveView, stripMediaUrls, viewParam, type View } fro
  * this one and will save considerably more. Until then this is the honest
  * ceiling, and this docblock says so rather than implying a shape was checked.
  */
-export const OH_VIEWS = ['compact', 'full'] as const;
-
-const NOTE =
-  'compact strips image/avatar URLs from the response; "full" returns OneHome\'s payload untouched. ' +
-  'No field projection: this server has no verified record of which OneHome fields matter, and inventing ' +
-  'one would risk dropping a field a caller needs.';
+export const OH_VIEWS = REALTY_VIEWS;
 
 /**
  * The `view` parameter, for the tools that take one.
@@ -43,15 +39,11 @@ const NOTE =
  * coverage than exists is worse than none: it is exactly what someone checks
  * INSTEAD of counting.
  */
-export const viewArg = (): ReturnType<typeof viewParam> => viewParam(OH_VIEWS, { note: NOTE });
-
-/**
- * Answer in the requested rung.
- *
- * Only ever called from a READ tool. A write's response is a receipt — an id,
- * a status — with nothing to strip and everything to keep.
- */
-export function viewResponse(view: string | undefined, data: unknown): ReturnType<typeof minifiedResult> {
-  const rung: View = resolveView(view, OH_VIEWS);
-  return minifiedResult(rung === 'compact' ? stripMediaUrls(data) : data);
-}
+//
+// `viewResponse` answers in the requested rung. Only ever called from a READ
+// tool. A write's response is a receipt — an id, a status — with nothing to
+// strip and everything to keep. Both come from realty-core's shared
+// `makeViewHelpers` (fleet-audit#1175); the note is `compactNote('OneHome')`.
+export const { viewArg, viewResponse } = makeViewHelpers(mcpUtils, {
+  portal: 'OneHome',
+});

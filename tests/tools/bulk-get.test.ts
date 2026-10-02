@@ -4,6 +4,7 @@ import { OneHomeClient } from '../../src/client.js';
 import { registerBulkGetTools } from '../../src/tools/bulk-get.js';
 import { FakeTransport, ok, createTestHarness } from '../helpers.js';
 import type { RawListingDetail } from '../../src/format.js';
+import { OneHomeRequestTimeoutError } from '../../src/request-deadline.js';
 
 function sampleListing(
   id: string,
@@ -253,6 +254,50 @@ describe('onehome_bulk_get', () => {
     expect(result.rows?.[1]?.error).toMatch(/^bridge timeout after retry: /);
     expect(result.rows?.[0]?.property?.listing_id).toBe('A');
     expect(result.rows?.[2]?.property?.listing_id).toBe('C');
+  });
+
+  it('retries a OneHomeRequestTimeoutError row once and classifies it as a retryable timeout (fleet-audit#1078)', async () => {
+    // onehome's GraphQL never goes through the bridge, so the upstream
+    // deadline throws OneHomeRequestTimeoutError, not FetchproxyTimeoutError.
+    // mcp-utils >= 2.12's retryOnceOnTimeout / classifyRowError recognise it
+    // (isTimeoutError), so the row's retry + `timeout` contract now holds.
+    const transport = new FakeTransport();
+    let attempts = 0;
+    transport.on('ListingById', (vars) => {
+      const id = vars.listingId as string;
+      if (id === 'STALL') {
+        attempts++;
+        throw new OneHomeRequestTimeoutError('OneHome GraphQL ListingById', 25_000);
+      }
+      return ok({ listingDetail: sampleListing(id, 100000) });
+    });
+    const result = (await runBulkGet(transport, {
+      group_id: 'g1',
+      listing_ids: ['A', 'STALL'],
+    })) as BulkResult & { ok?: number; errored?: number };
+    expect(attempts).toBe(2); // initial + one retry
+    expect(result.rows?.[1]).toMatchObject({
+      listing_id: 'STALL',
+      status: 'timeout',
+      error_kind: 'timeout',
+      retryable: true,
+    });
+    expect(result.rows?.[0]).toMatchObject({ listing_id: 'A', status: 'ok' });
+    expect(result).toMatchObject({ count: 2, ok: 1, errored: 1 });
+  });
+
+  it('classifies a genuine per-row miss as a non-retryable error kind', async () => {
+    const transport = new FakeTransport();
+    transport.on('ListingById', () => {
+      throw new Error('listing not found within group');
+    });
+    const result = await runBulkGet(transport, { group_id: 'g1', listing_ids: ['X'] });
+    expect(result.rows?.[0]).toMatchObject({
+      listing_id: 'X',
+      status: 'other',
+      error_kind: 'other',
+      retryable: false,
+    });
   });
 
   it('caps concurrency to BRIDGE_CONCURRENCY (=6) to avoid swamping the bridge', async () => {
