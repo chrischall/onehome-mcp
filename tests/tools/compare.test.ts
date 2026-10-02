@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSummary, registerCompareTools } from '../../src/tools/compare.js';
 import type { FormattedListing } from '../../src/format.js';
+import { OneHomeRequestTimeoutError } from '../../src/request-deadline.js';
 import { ok, makeClient, createTestHarness, FakeTransport } from '../helpers.js';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 
@@ -147,6 +148,41 @@ describe('onehome_compare_properties summary opt-in (issue #18)', () => {
       expect('summary' in body).toBe(false);
       expect(Array.isArray(body.rows)).toBe(true);
       expect((body.rows as unknown[]).length).toBe(2);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('classifies a timed-out target as a retryable timeout row and counts ok/errored (fleet-audit#1078, #1091)', async () => {
+    const { client, transport } = makeClient();
+    transport.setStatus({ sessionContext: { groupId: 'G' } });
+    let stalls = 0;
+    transport.on('ListingById', (vars) => {
+      if (vars.listingId === 'B') {
+        stalls++;
+        throw new OneHomeRequestTimeoutError('OneHome GraphQL ListingById', 25_000);
+      }
+      return ok({ listingDetail: RAW_A });
+    });
+    const harness = await createTestHarness((server) =>
+      registerCompareTools(server, client)
+    );
+    try {
+      const body = parseToolResult(
+        await harness.callTool('onehome_compare_properties', {
+          targets: [{ listing_id: 'A' }, { listing_id: 'B' }],
+        })
+      );
+      expect(stalls).toBe(2); // retried once
+      expect(body).toMatchObject({ target_count: 2, count: 2, ok: 1, errored: 1 });
+      const rows = body.rows as Array<Record<string, unknown>>;
+      expect(rows[1]).toMatchObject({
+        listing_id: 'B',
+        status: 'timeout',
+        error_kind: 'timeout',
+        retryable: true,
+      });
+      expect(rows[0]).toMatchObject({ listing_id: 'A', status: 'ok' });
     } finally {
       await harness.close();
     }

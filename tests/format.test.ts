@@ -182,11 +182,8 @@ describe('formatListing', () => {
       };
       const out = formatListing('X', raw);
       expect(out.hoa_monthly_usd).toBeNull();
-      // The warning now originates in the canonical realty-core
-      // `hoaToMonthlyUsd` (prefix `[realty-core]`, "unknown HOA
-      // frequency") rather than onehome's old inline copy — a documented
-      // delta of the migration. Assert on the stable, helper-agnostic
-      // substring so we tolerate exact wording.
+      // realty-core >= 0.5 no longer logs; onehome logs through the
+      // `onUnknownFrequency` callback. Assert on the stable substring.
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('unknown HOA frequency')
       );

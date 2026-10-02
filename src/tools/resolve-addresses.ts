@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
+import { runBoundedBatch } from '@chrischall/mcp-utils';
 import {
-  mapWithConcurrency,
   retryOnceOnTimeout,
   classifyRowError,
   BRIDGE_CONCURRENCY,
 } from '@chrischall/mcp-utils/fetchproxy';
+import {
+  DEFAULT_ROW_BATCH_DEADLINE_MS,
+  errorRow,
+  pendingRow,
+  type RowErrorFields,
+} from '@chrischall/realty-core';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import {
@@ -41,6 +47,15 @@ interface ResolveRow {
   query?: string;
   matched_via?: 'suggestions' | 'search_fallback';
   matched_outside_saved_area?: boolean;
+  /** Error / pending rows only (realty-core row fields, fleet-audit#1091). */
+  status?: RowErrorFields['status'];
+  error_kind?: RowErrorFields['error_kind'];
+  retryable?: boolean;
+}
+
+/** Test seam: shrink the overall deadline so the suite doesn't wait 45s. */
+export interface ResolveAddressesTuning {
+  overallDeadlineMs?: number;
 }
 
 function toRow(result: ByAddressResult): ResolveRow {
@@ -62,8 +77,10 @@ function toRow(result: ByAddressResult): ResolveRow {
 
 export function registerResolveAddressesTools(
   server: McpServer,
-  client: OneHomeClient
+  client: OneHomeClient,
+  tuning: ResolveAddressesTuning = {}
 ): void {
+  const overallDeadlineMs = tuning.overallDeadlineMs ?? DEFAULT_ROW_BATCH_DEADLINE_MS;
   server.registerTool(
     'onehome_resolve_addresses',
     {
@@ -71,7 +88,10 @@ export function registerResolveAddressesTools(
       description:
         `Resolve up to ${RESOLVE_ADDRESSES_MAX} structured addresses to OneHome canonical portal URLs + listing OSK ids in one call. ` +
         'Each input is a `{address, city?, state?, zip?}` object. Output preserves input order; one row per input, ' +
-        'either `{resolved: true, url, listing_id, address}` or `{resolved: false, error, query}`. ' +
+        'either `{resolved: true, url, listing_id, address}` or `{resolved: false, error, query}`; a row that failed (rather than ' +
+        'genuinely missed) also carries `status` = `error_kind` and `retryable` — `timeout` / `bridge_down` / `pending` mean retry it, ' +
+        'not "no listing". The whole call is bounded by an overall deadline; unsettled rows come back `status: "pending"` with a ' +
+        'top-level `pending` count. ' +
         'Walks the exact same 2-rung ladder as `onehome_get_by_address` via the shared helper (rung 1: ' +
         '`ListingSuggestionsSearch` against the magic-link saved-search scope; rung 2: search-fallback page-walking the ' +
         'broader saved-search / raw-listings pool bounded by `groupId`) — bulk and single cannot diverge. ' +
@@ -124,31 +144,42 @@ export function registerResolveAddressesTools(
       // per address (perf P1). Shared even under concurrent fan-out — the
       // cache stores the in-flight promise so racing rows await one fetch.
       const poolCache: FallbackPoolCache = new Map();
-      const rows = await mapWithConcurrency(
+      // mcp-utils `runBoundedBatch` (fleet-audit#1091 — onehome resolve had
+      // no deadline): 6 in flight, the whole call bounded by the cohort's
+      // 45s deadline, unsettled rows answered `pending`. Failed rows keep
+      // `{ resolved: false, error, query }` and gain realty-core's row
+      // fields (`status` = `error_kind`, `retryable`), so a timeout —
+      // including onehome's own OneHomeRequestTimeoutError, which
+      // mcp-utils >= 2.12 retries once and classifies (fleet-audit#1078) —
+      // is never read as "no listing at this address".
+      const rows = await runBoundedBatch<ByAddressInput, ResolveRow>(
         inputs,
-        BRIDGE_CONCURRENCY,
-        async (a) => {
-          try {
-            return toRow(
-              await retryOnceOnTimeout(() =>
-                resolveByAddressOnce(client, a, groupId, poolCache)
-              )
-            );
-          } catch (e) {
-            return {
-              resolved: false,
-              error: classifyRowError(e).message,
-              query: buildAddressQuery(a),
-            } satisfies ResolveRow;
-          }
+        async (a) =>
+          toRow(
+            await retryOnceOnTimeout(() =>
+              resolveByAddressOnce(client, a, groupId, poolCache)
+            )
+          ),
+        {
+          deadlineMs: overallDeadlineMs,
+          concurrency: BRIDGE_CONCURRENCY,
+          onError: (a, _i, e) =>
+            errorRow({ resolved: false, query: buildAddressQuery(a) }, classifyRowError(e)),
+          onTimeout: (a) =>
+            pendingRow(
+              { resolved: false, query: buildAddressQuery(a) },
+              'onehome_resolve_addresses'
+            ),
         }
       );
+      const pending = rows.filter((r) => r.status === 'pending').length;
       const resolved = rows.filter((r) => r.resolved).length;
       return minifiedResult({
         ...(groupId ? { group_id: groupId } : {}),
         count: rows.length,
         resolved,
         unresolved: rows.length - resolved,
+        ...(pending > 0 ? { pending } : {}),
         rows,
       });
     }

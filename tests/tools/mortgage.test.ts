@@ -48,3 +48,43 @@ describe('mortgage / affordability math', () => {
     expect(out.max_home_price).toBeGreaterThan(50000);
   });
 });
+
+describe('onehome_calculate_mortgage schema caps (realty-core shared registrar, fleet-audit#1090)', () => {
+  it('advertises loan_term_years.maximum = MAX_LOAN_TERM_YEARS', async () => {
+    const { MAX_LOAN_TERM_YEARS } = await import('@chrischall/realty-core');
+    const { registerMortgageTools } = await import('../../src/tools/mortgage.js');
+    const { createTestHarness } = await import('@chrischall/mcp-utils/test');
+    const th = await createTestHarness((server) => registerMortgageTools(server));
+    try {
+      const { tools } = await th.client.listTools();
+      const props = tools.find((t) => t.name === 'onehome_calculate_mortgage')!.inputSchema
+        .properties as Record<string, { maximum?: number }>;
+      expect(props.loan_term_years.maximum).toBe(MAX_LOAN_TERM_YEARS);
+    } finally {
+      await th.close();
+    }
+  });
+});
+
+describe('onehome_calculate_mortgage keeps the lean output shape', () => {
+  it('ltv is a 0..1 ratio and the lean totals are present', async () => {
+    const { registerMortgageTools } = await import('../../src/tools/mortgage.js');
+    const { createTestHarness, parseToolResult } = await import('@chrischall/mcp-utils/test');
+    const th = await createTestHarness((server) => registerMortgageTools(server));
+    try {
+      const out = parseToolResult<Record<string, unknown>>(
+        await th.callTool('onehome_calculate_mortgage', {
+          home_price: 500_000,
+          interest_rate: 6,
+          down_payment_percent: 20,
+        })
+      );
+      expect(out.ltv).toBe(0.8);
+      expect(out).toHaveProperty('monthly_total_piti');
+      expect(out).toHaveProperty('total_interest_over_term');
+      expect(out).not.toHaveProperty('interest_rate');
+    } finally {
+      await th.close();
+    }
+  });
+});

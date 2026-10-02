@@ -490,3 +490,18 @@ describe('the declared capture window reaches the transport (#178)', () => {
     expect(deadline()).not.toBe(30_000);
   });
 });
+
+describe('wsPortFromEnv — ONEHOME_WS_PORT via mcp-utils readPortEnv (fleet-audit#1081)', () => {
+  it('reads a valid port', async () => {
+    const { wsPortFromEnv } = await import('../src/transport-fetchproxy.js');
+    expect(wsPortFromEnv({ ONEHOME_WS_PORT: '38001' })).toBe(38001);
+  });
+
+  it('never hands NaN / out-of-range / placeholder values to the server — falls back to fetchproxy\'s default', async () => {
+    const { wsPortFromEnv } = await import('../src/transport-fetchproxy.js');
+    for (const bad of ['abc', '0', '70000', '${ONEHOME_WS_PORT}', '', 'undefined']) {
+      expect(wsPortFromEnv({ ONEHOME_WS_PORT: bad })).toBeUndefined();
+    }
+    expect(wsPortFromEnv({})).toBeUndefined();
+  });
+});

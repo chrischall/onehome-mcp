@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
+import { runBoundedBatch } from '@chrischall/mcp-utils';
+import {
+  BRIDGE_CONCURRENCY,
+  classifyRowError,
+  retryOnceOnTimeout,
+} from '@chrischall/mcp-utils/fetchproxy';
+import { pivotSummary, runRowBatch } from '@chrischall/realty-core';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
@@ -16,12 +23,11 @@ interface CompareRow {
   listing_id?: string;
   url?: string;
   property?: FormattedListing;
-  error?: string;
 }
 
 interface SummaryRow {
   field: string;
-  values: Array<string | number | null | Record<string, unknown>>;
+  values: unknown[];
 }
 
 const SUMMARY_FIELDS: Array<keyof FormattedListing> = [
@@ -43,22 +49,13 @@ const SUMMARY_FIELDS: Array<keyof FormattedListing> = [
   'tax_annual',
 ];
 
-export function buildSummary(rows: CompareRow[]): SummaryRow[] {
-  return SUMMARY_FIELDS.map((field) => ({
-    field,
-    values: rows.map((r) => {
-      if (!r.property) return null;
-      const v = (r.property as unknown as Record<string, unknown>)[field];
-      if (v === undefined || v === null) return null;
-      if (typeof v === 'string' || typeof v === 'number') return v;
-      // Object-valued fields (hoa_fee, lot_size, major_change) stay as
-      // objects so the summary matches the per-row `rows[].property.*`
-      // shape — JSON-encoding them as strings forced callers to re-parse
-      // every cell. (Issue #18.)
-      if (typeof v === 'object') return v as Record<string, unknown>;
-      return null;
-    }),
-  }));
+export function buildSummary(rows: ReadonlyArray<CompareRow>): SummaryRow[] {
+  // realty-core `pivotSummary` (fleet-audit#1091): each cell is the row's
+  // value verbatim — object-valued fields (hoa_fee, lot_size) stay objects
+  // so the summary matches `rows[].property.*` (issue #18); `undefined` /
+  // failed row → null. (onehome used to null booleans too; none of these
+  // fields is boolean, and the cohort rule is verbatim.)
+  return pivotSummary<FormattedListing>(rows, SUMMARY_FIELDS);
 }
 
 export function registerCompareTools(
@@ -108,38 +105,47 @@ export function registerCompareTools(
       // Only forward an explicit group_id; fetchListingDetail defaults
       // each target from the session its listing id routes to.
       const groupId = i.group_id;
-      const rows: CompareRow[] = await Promise.all(
-        i.targets.map(async (t) => {
-          const row: CompareRow = {};
-          if (t.listing_id) row.listing_id = t.listing_id;
-          if (t.url) row.url = t.url;
-          try {
-            const { listingId, raw } = await fetchListingDetail(client, {
-              group_id: groupId,
-              listing_id: t.listing_id,
-              url: t.url,
-              saved_search_id: t.saved_search_id,
-            });
-            row.property = formatListing(listingId, raw, {
+      // realty-core `runRowBatch` (fleet-audit#1091): replaces an unbounded
+      // `Promise.all` — now 6 in flight, deadline-bounded (45s), timeouts
+      // (incl. OneHomeRequestTimeoutError, fleet-audit#1078) retried once,
+      // and every failed row classified with `status` = `error_kind` +
+      // `retryable`.
+      const envelope = await runRowBatch(
+        i.targets,
+        async (t) => {
+          const { listingId, raw } = await fetchListingDetail(client, {
+            group_id: groupId,
+            listing_id: t.listing_id,
+            url: t.url,
+            saved_search_id: t.saved_search_id,
+          });
+          return {
+            property: formatListing(listingId, raw, {
               includeDescription: i.include_description,
-            });
-          } catch (err) {
-            row.error = err instanceof Error ? err.message : String(err);
-          }
-          return row;
-        })
+            }),
+          };
+        },
+        {
+          kit: { runBoundedBatch, classifyRowError, retryOnceOnTimeout },
+          toolLabel: 'onehome_compare_properties',
+          rowBase: (t) => ({
+            ...(t.listing_id ? { listing_id: t.listing_id } : {}),
+            ...(t.url ? { url: t.url } : {}),
+          }),
+          concurrency: BRIDGE_CONCURRENCY,
+          resultsKey: 'rows',
+        }
       );
       const body: {
         group_id: string | undefined;
         target_count: number;
         summary?: SummaryRow[];
-        rows: CompareRow[];
-      } = {
+      } & typeof envelope = {
         group_id: groupId ?? client.sessionContextFor().groupId,
         target_count: i.targets.length,
-        rows,
+        ...envelope,
       };
-      if (i.include_summary === true) body.summary = buildSummary(rows);
+      if (i.include_summary === true) body.summary = buildSummary(envelope.rows);
       return viewResponse((i as { view?: string }).view, body);
     }
   );
