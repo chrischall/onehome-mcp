@@ -20,6 +20,7 @@
  * mode for no benefit.
  */
 
+import { detectEdgeBlock, EdgeBlockedError } from '@chrischall/mcp-utils';
 import {
   createFetchproxyTransport,
   FetchproxyServer,
@@ -307,6 +308,18 @@ export class FetchproxyTransport implements OneHomeTransport {
       this.recordFailure(`network error: ${msg}`);
       throw new Error(`onehome-mcp direct fetch failed: ${msg}`);
     }
+    // A CDN/WAF refusal page arrives as a 403 too, but the API never saw the
+    // token: keep it, rather than discarding a good capture the user has to
+    // re-trigger from the portal tab (chrischall/mcp-host#1015).
+    const edge = detectEdgeBlock({ body: text, headers: response.headers, status: response.status });
+    if (edge !== null) {
+      this.recordFailure(`HTTP ${response.status} (blocked at ${edge.vendor})`);
+      throw new EdgeBlockedError(response.status, edge.vendor, {
+        service: 'OneHome GraphQL',
+        method: 'POST',
+        path: `/graphql (${req.operationName})`,
+      });
+    }
     if (response.status === 401 || response.status === 403) {
       // Captured token has been revoked — discard and try once more.
       this.dropToken();
@@ -385,6 +398,14 @@ export class FetchproxyTransport implements OneHomeTransport {
       }
       status = response.status;
       responseUrl = response.url || url;
+      // A CDN/WAF block says nothing about the token: no drop, no recapture.
+      // Thrown rather than returned, as graphql() does, so the schools /
+      // walk-score tools cannot read it as an agent-only dataset (onehome#226).
+      const edge = detectEdgeBlock({ body: text, headers: response.headers, status });
+      if (edge !== null) {
+        this.recordFailure(`REST HTTP ${status} (blocked at ${edge.vendor})`);
+        throw new EdgeBlockedError(status, edge.vendor, { service: 'OneHome REST', method: 'GET', path: normalized });
+      }
       if ((status === 401 || status === 403) && attempt === 0) {
         // Revoked-token surface — drop it and retry once with a fresh
         // capture. A persistent 401/403 (agent-only dataset) survives the
