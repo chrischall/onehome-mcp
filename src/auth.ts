@@ -20,6 +20,8 @@
 import { withDeadline } from '@chrischall/mcp-utils/fetchproxy';
 import {
   decodeJwtClaim,
+  detectEdgeBlock,
+  EdgeBlockedError,
   McpToolError,
   truncateErrorMessage,
 } from '@chrischall/mcp-utils';
@@ -292,6 +294,17 @@ export async function exchangeEmailToken(
   }
   const { status, text } = outcome.value;
   if (status < 200 || status >= 300) {
+    // A CDN/WAF refusal page is not checkToken judging the email token, and
+    // "ask your agent to resend the magic link" would not fix it
+    // (chrischall/mcp-host#1015).
+    const edge = detectEdgeBlock({ body: text, status });
+    if (edge !== null) {
+      throw new EdgeBlockedError(status, edge.vendor, {
+        service: 'OneHome',
+        method: 'POST',
+        path: '/api/authentication/checkToken',
+      });
+    }
     throw new CheckTokenError(status, text);
   }
   let parsed: Record<string, unknown>;

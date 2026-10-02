@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { GraphQLResponseError } from '../client.js';
+import { EdgeBlockedError } from '@chrischall/mcp-utils';
 import {
   buildGetOneHomeUser,
   buildGetSavedSearchBySearchId,
@@ -59,7 +60,7 @@ interface HealthcheckResult {
   last_failure_reason: string | null;
   consecutive_failures: number;
   error?: {
-    kind: 'transport' | 'graphql' | 'timeout' | 'other';
+    kind: 'transport' | 'graphql' | 'timeout' | 'edge_blocked' | 'other';
     message: string;
   };
   hint: string;
@@ -68,7 +69,7 @@ interface HealthcheckResult {
 function hintFor(args: {
   ok: boolean;
   mode: 'env_token' | 'magic_link' | 'fetchproxy_capture';
-  errorKind?: 'transport' | 'graphql' | 'timeout' | 'other';
+  errorKind?: 'transport' | 'graphql' | 'timeout' | 'edge_blocked' | 'other';
   secondsUntilExpiry: number | null;
 }): string {
   if (args.ok) {
@@ -81,6 +82,9 @@ function hintFor(args: {
       } soon.`;
     }
     return 'Auth + GraphQL round-tripped successfully. The MCP is ready.';
+  }
+  if (args.errorKind === 'edge_blocked') {
+    return "OneHome's CDN/WAF refused the request before it reached the API, so the token was never judged — refreshing ONEHOME_TOKEN / ONEHOME_MAGIC_LINK or re-capturing will not help. This is usually a block on this host's IP address or request fingerprint: retry later, or from a different network.";
   }
   if (args.errorKind === 'graphql') {
     return 'GraphQL came back with errors — inspect `error.message` for the upstream message. Common cause: the session has a different access scope than expected (consumer vs agent).';
@@ -118,7 +122,7 @@ export function registerHealthcheckTools(
       const start = Date.now();
       let ok = false;
       let detail: string | undefined;
-      let errorKind: 'transport' | 'graphql' | 'timeout' | 'other' | undefined;
+      let errorKind: 'transport' | 'graphql' | 'timeout' | 'edge_blocked' | 'other' | undefined;
       let errorMessage: string | undefined;
       try {
         if (probe === 'GetSavedSearchBySearchId') {
@@ -142,7 +146,9 @@ export function registerHealthcheckTools(
           }
         }
       } catch (err) {
-        if (err instanceof GraphQLResponseError) {
+        if (err instanceof EdgeBlockedError) {
+          errorKind = 'edge_blocked';
+        } else if (err instanceof GraphQLResponseError) {
           errorKind = 'graphql';
         } else if (err instanceof Error && /timed out/i.test(err.message)) {
           errorKind = 'timeout';

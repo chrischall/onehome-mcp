@@ -18,6 +18,7 @@
  * scope the agent shared with this consumer).
  */
 
+import { detectEdgeBlock, EdgeBlockedError } from '@chrischall/mcp-utils';
 import {
   decodeJwtExpiresAtMs,
   exchangeEmailToken,
@@ -217,6 +218,17 @@ export class DirectTransport implements OneHomeTransport {
       const msg = err instanceof Error ? err.message : String(err);
       this.recordFailure(`network error: ${msg}`);
       throw new Error(`onehome-mcp direct fetch failed: ${msg}`);
+    }
+    // A CDN/WAF refusal page arrives as a 403 too, but the API never saw the
+    // token — so not "rejected the token" (chrischall/mcp-host#1015).
+    const edge = detectEdgeBlock({ body: text, headers: response.headers, status: response.status });
+    if (edge !== null) {
+      this.recordFailure(`HTTP ${response.status} (blocked at ${edge.vendor})`);
+      throw new EdgeBlockedError(response.status, edge.vendor, {
+        service: 'OneHome GraphQL',
+        method: 'POST',
+        path: `/graphql (${req.operationName})`,
+      });
     }
     if (response.status === 401 || response.status === 403) {
       this.recordFailure(`HTTP ${response.status}`);
