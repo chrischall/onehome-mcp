@@ -58,12 +58,7 @@ const ORIGIN = 'https://portal.onehome.com';
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/127.0 Safari/537.36';
-/**
- * How long to wait for the user to make the portal do something we can
- * snapshot. Exported so a test can assert the transport deadline actually
- * clears it — the value was declared here and served as 30 s for as long as
- * this file has existed (#178).
- */
+
 /**
  * The fetchproxy WebSocket port from `ONEHOME_WS_PORT`, validated by
  * mcp-utils' `readPortEnv` (fleet-audit#1081): an integer in 1..65535, with
@@ -78,6 +73,12 @@ export function wsPortFromEnv(env: EnvSource = process.env): number | undefined 
   return port === 0 ? undefined : port;
 }
 
+/**
+ * How long to wait for the user to make the portal do something we can
+ * snapshot. Exported so a test can assert the transport deadline actually
+ * clears it — the value was declared here and served as 30 s for as long as
+ * this file has existed (#178).
+ */
 export const CAPTURE_TIMEOUT_MS = 120_000;
 
 /**
