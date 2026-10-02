@@ -294,6 +294,18 @@ export class DirectTransport implements OneHomeTransport {
       this.recordFailure(`rest network error: ${msg}`);
       throw new Error(`onehome-mcp REST fetch failed: ${msg}`);
     }
+    // Thrown, as graphql() throws: returned as a non-ok RestResponse, a block
+    // reaches the schools/walk-score tools as "this dataset is agent-only"
+    // (chrischall/mcp-host#1015, onehome#226).
+    const edge = detectEdgeBlock({ body: text, headers: response.headers, status: response.status });
+    if (edge !== null) {
+      this.recordFailure(`REST HTTP ${response.status} (blocked at ${edge.vendor})`);
+      throw new EdgeBlockedError(response.status, edge.vendor, {
+        service: 'OneHome REST',
+        method: 'GET',
+        path: normalized,
+      });
+    }
     const isOk = response.status >= 200 && response.status < 300;
     if (isOk) this.recordSuccess();
     else this.recordFailure(`REST HTTP ${response.status}`);

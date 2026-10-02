@@ -399,8 +399,13 @@ export class FetchproxyTransport implements OneHomeTransport {
       status = response.status;
       responseUrl = response.url || url;
       // A CDN/WAF block says nothing about the token: no drop, no recapture.
-      // The non-ok response falls through below like any other.
-      if (detectEdgeBlock({ body: text, headers: response.headers, status }) !== null) break;
+      // Thrown rather than returned, as graphql() does, so the schools /
+      // walk-score tools cannot read it as an agent-only dataset (onehome#226).
+      const edge = detectEdgeBlock({ body: text, headers: response.headers, status });
+      if (edge !== null) {
+        this.recordFailure(`REST HTTP ${status} (blocked at ${edge.vendor})`);
+        throw new EdgeBlockedError(status, edge.vendor, { service: 'OneHome REST', method: 'GET', path: normalized });
+      }
       if ((status === 401 || status === 403) && attempt === 0) {
         // Revoked-token surface — drop it and retry once with a fresh
         // capture. A persistent 401/403 (agent-only dataset) survives the

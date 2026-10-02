@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { FetchproxyServer, FetchproxyServerOpts } from '@chrischall/mcp-utils/fetchproxy';
 import { OneHomeClient } from '../src/client.js';
 import { registerHealthcheckTools } from '../src/tools/healthcheck.js';
+import { registerSchoolsTools } from '../src/tools/schools.js';
 import { DirectTransport } from '../src/transport-direct.js';
 import { FetchproxyTransport } from '../src/transport-fetchproxy.js';
 import { createTestHarness } from './helpers.js';
@@ -156,13 +157,67 @@ describe('a CloudFront block reads as edge_blocked, not a rejected token', () =>
     const fetchImpl = vi.fn(async () => blocked());
     const { transport, captures } = captureTransport(fetchImpl as unknown as typeof fetch);
 
+    const err = await transport.rest('/schools?lat=1&lng=2').catch((e: unknown) => e);
+
+    // Thrown, as graphql() throws: a non-ok RestResponse would reach the tool
+    // as "this dataset is agent-only" (onehome#226).
+    expect((err as Error).name).toBe('EdgeBlockedError');
+    expect((err as { status?: number }).status).toBe(403);
+    // Neither dropped nor re-fetched on a recapture.
+    expect(captures()).toBe(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('direct transport: a blocked REST call throws EdgeBlockedError (onehome#226)', async () => {
+    const fetchImpl = vi.fn(async () => blocked());
+    const transport = new DirectTransport({
+      token: FAKE_JWT,
+      authMode: 'env_token',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const err = await transport.rest('/schools?lat=1&lng=2').catch((e: unknown) => e);
+
+    expect((err as Error).name).toBe('EdgeBlockedError');
+    expect((err as { status?: number }).status).toBe(403);
+    expect((err as Error).message).toMatch(/CloudFront/);
+  });
+
+  it('onehome_get_schools reports a block, not "agent-only", in the default direct mode', async () => {
+    const fetchImpl = vi.fn(async () => blocked());
+    const transport = new DirectTransport({
+      token: FAKE_JWT,
+      authMode: 'env_token',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const harness = await createTestHarness((server) =>
+      registerSchoolsTools(server, new OneHomeClient({ transport })),
+    );
+    try {
+      const result = (await harness.callTool('onehome_get_schools', { lat: 1, lng: 2 })) as {
+        isError?: boolean;
+        content: Array<{ text?: string }>;
+      };
+      const text = result.content.map((c) => c.text ?? '').join('\n');
+      expect(text).not.toMatch(/agent-only/);
+      expect(text).toMatch(/CloudFront/);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("control: OneHome's own JSON 403 on REST still comes back as a non-ok response", async () => {
+    const fetchImpl = vi.fn(async () => json(403, { message: 'Forbidden' }));
+    const transport = new DirectTransport({
+      token: FAKE_JWT,
+      authMode: 'env_token',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
     const res = await transport.rest('/schools?lat=1&lng=2');
 
     expect(res.ok).toBe(false);
     expect(res.status).toBe(403);
-    // Neither dropped nor re-fetched on a recapture.
-    expect(captures()).toBe(1);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("control: the API's own 401 is still a rejected token", async () => {
