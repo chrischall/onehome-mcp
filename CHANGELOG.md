@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.5](https://github.com/chrischall/onehome-mcp/compare/v1.1.4...v1.1.5) (2026-10-03)
+
+
+### Bug Fixes
+
+* **deps:** adopt @chrischall/mcp-utils 2.12.0 and realty-core 0.5.1 shared tools ([#229](https://github.com/chrischall/onehome-mcp/issues/229)) ([ff9523b](https://github.com/chrischall/onehome-mcp/commit/ff9523be9122b1b769c3e34ca9667b2e684c83f1))
+* **deps:** bump @chrischall/mcp-utils to 2.10.0 ([#228](https://github.com/chrischall/onehome-mcp/issues/228)) ([3f5d800](https://github.com/chrischall/onehome-mcp/commit/3f5d8003a1c90f31ae91e39bb10fd284d19c5958))
+* **deps:** bump @chrischall/mcp-utils to 2.13.0 and realty-core to 0.6.0 ([#232](https://github.com/chrischall/onehome-mcp/issues/232)) ([880ca45](https://github.com/chrischall/onehome-mcp/commit/880ca45124f89d98b0a97c39cb37301cd30b6504))
+* report CDN/WAF blocks as edge_blocked, not a rejected credential (mcp-utils 2.9.0) ([#225](https://github.com/chrischall/onehome-mcp/issues/225)) ([68e53be](https://github.com/chrischall/onehome-mcp/commit/68e53be97b73d839195fc50d62cca64305159526))
+
+
+### Documentation
+
+* **transport:** reattach the CAPTURE_TIMEOUT_MS docblock ([#231](https://github.com/chrischall/onehome-mcp/issues/231)) ([05e1594](https://github.com/chrischall/onehome-mcp/commit/05e159456eb763583b81edd6be92e93c34133f43))
+
 ## [1.1.4](https://github.com/chrischall/onehome-mcp/compare/v1.1.3...v1.1.4) (2026-09-27)
 
 
