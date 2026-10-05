@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/chrischall/onehome-mcp/compare/v1.1.5...v1.1.6) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** require @chrischall/mcp-utils 2.14.0 and MCP SDK 2.3.0 ([#233](https://github.com/chrischall/onehome-mcp/issues/233)) ([678a9ab](https://github.com/chrischall/onehome-mcp/commit/678a9ab2eda27b9a9370db128c318a364295e949))
+
 ## [1.1.5](https://github.com/chrischall/onehome-mcp/compare/v1.1.4...v1.1.5) (2026-10-03)
 
 
