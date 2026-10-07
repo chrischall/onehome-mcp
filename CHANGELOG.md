@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.7](https://github.com/chrischall/onehome-mcp/compare/v1.1.6...v1.1.7) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** Bump the production-dependencies group with 2 updates ([#237](https://github.com/chrischall/onehome-mcp/issues/237)) ([66555cc](https://github.com/chrischall/onehome-mcp/commit/66555cc9a11e1839db1492d0d5cff0eb88b9bae6))
+* **deps:** fix fetchproxy room-frame validation and add MCP_CONFIRM_ELICITATION opt-out ([#240](https://github.com/chrischall/onehome-mcp/issues/240)) ([b48e72c](https://github.com/chrischall/onehome-mcp/commit/b48e72c41a4e9ba7cf310c0dcde01b9a4445737b))
+
 ## [1.1.6](https://github.com/chrischall/onehome-mcp/compare/v1.1.5...v1.1.6) (2026-10-05)
 
 
