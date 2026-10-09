@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.8](https://github.com/chrischall/onehome-mcp/compare/v1.1.7...v1.1.8) (2026-10-09)
+
+
+### Bug Fixes
+
+* annotate tools truthfully and sync manifests with the served tools ([#244](https://github.com/chrischall/onehome-mcp/issues/244)) ([6dc3ff4](https://github.com/chrischall/onehome-mcp/commit/6dc3ff40f39e9a12ba93746cf899a3bcb354e342))
+* declare the plugin MCP config under the mcpServers key Claude Code reads ([#245](https://github.com/chrischall/onehome-mcp/issues/245)) ([e1105f2](https://github.com/chrischall/onehome-mcp/commit/e1105f2a55ce219578cf3c447f2887bcbd0259d6))
+* **deps:** update @chrischall/mcp-utils to 3.0.0 ([#243](https://github.com/chrischall/onehome-mcp/issues/243)) ([26dca21](https://github.com/chrischall/onehome-mcp/commit/26dca21c2cb343597b2fce3c74b853e2143dc6e4))
+* resolve low-severity audit findings ([#241](https://github.com/chrischall/onehome-mcp/issues/241)) ([edc860b](https://github.com/chrischall/onehome-mcp/commit/edc860b948c10f4d5f2fe21f5a756f14cb14163d))
+
 ## [1.1.7](https://github.com/chrischall/onehome-mcp/compare/v1.1.6...v1.1.7) (2026-10-07)
 
 
