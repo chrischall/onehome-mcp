@@ -452,6 +452,49 @@ describe('FetchproxyTransport — rest() token lifecycle (parity with graphql())
   });
 });
 
+describe('FetchproxyTransport — graphql() revoked-token recovery (parity with rest())', () => {
+  it('recaptures and retries once when the first GraphQL call returns 401', async () => {
+    const stubFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+      );
+    let n = 0;
+    captureBehavior = async () => (++n === 1 ? 'Bearer stale.token' : 'Bearer fresh.token');
+    const t = newTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    const res = await t.graphql({ operationName: 'Op', query: 'q' });
+    expect(stubFetch).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual({ ok: true });
+    const retryHeaders = (stubFetch.mock.calls[1][1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(retryHeaders.Authorization).toBe('Bearer fresh.token');
+    expect(t.status().authReady).toBe(true);
+  });
+
+  it('throws after one recapture when the GraphQL 401/403 persists', async () => {
+    captureBehavior = async () => 'Bearer good.token';
+    const stubFetch = vi
+      .fn()
+      .mockImplementation(async () => new Response('Forbidden', { status: 403 }));
+    const t = newTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    await expect(t.graphql({ operationName: 'Op', query: 'q' })).rejects.toThrow(
+      /rejected the captured token \(HTTP 403\)/,
+    );
+    expect(stubFetch).toHaveBeenCalledTimes(2);
+    expect(t.status().authReady).toBe(false);
+  });
+});
+
 /**
  * chrischall/onehome-mcp#178 — the declared 120 s window was served as 30 s.
  *

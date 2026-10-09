@@ -285,64 +285,72 @@ export class FetchproxyTransport implements OneHomeTransport {
   }
 
   async graphql<T = unknown>(req: GraphQLRequest): Promise<GraphQLResponse<T>> {
-    await this.ensureFreshToken();
     const body = JSON.stringify({
       operationName: req.operationName,
       query: req.query,
       variables: req.variables ?? {},
     });
-    let response: Response;
-    let text: string;
-    try {
-      ({ response, text } = await fetchTextWithDeadline(
-        this.fetchImpl,
-        GRAPHQL_URL,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            Authorization: `Bearer ${this.token}`,
-            Origin: ORIGIN,
-            Referer: `${ORIGIN}/`,
-            'User-Agent': USER_AGENT,
+    let response!: Response;
+    let text = '';
+    // 401/403 means the captured bearer was revoked: drop it, recapture,
+    // and retry once — the same self-heal rest() does (fleet-audit#619).
+    // A rejection that survives the fresh capture is thrown.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this.ensureFreshToken();
+      try {
+        ({ response, text } = await fetchTextWithDeadline(
+          this.fetchImpl,
+          GRAPHQL_URL,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              Authorization: `Bearer ${this.token}`,
+              Origin: ORIGIN,
+              Referer: `${ORIGIN}/`,
+              'User-Agent': USER_AGENT,
+            },
+            body,
           },
-          body,
-        },
-        {
-          label: `OneHome GraphQL ${req.operationName}`,
-          timeoutMs: this.requestTimeoutMs,
+          {
+            label: `OneHome GraphQL ${req.operationName}`,
+            timeoutMs: this.requestTimeoutMs,
+          }
+        ));
+      } catch (err) {
+        if (err instanceof OneHomeRequestTimeoutError) {
+          this.recordFailure(err.message);
+          throw err;
         }
-      ));
-    } catch (err) {
-      if (err instanceof OneHomeRequestTimeoutError) {
-        this.recordFailure(err.message);
-        throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        this.recordFailure(`network error: ${msg}`);
+        throw new Error(`onehome-mcp direct fetch failed: ${msg}`);
       }
-      const msg = err instanceof Error ? err.message : String(err);
-      this.recordFailure(`network error: ${msg}`);
-      throw new Error(`onehome-mcp direct fetch failed: ${msg}`);
-    }
-    // A CDN/WAF refusal page arrives as a 403 too, but the API never saw the
-    // token: keep it, rather than discarding a good capture the user has to
-    // re-trigger from the portal tab (chrischall/mcp-host#1015).
-    const edge = detectEdgeBlock({ body: text, headers: response.headers, status: response.status });
-    if (edge !== null) {
-      this.recordFailure(`HTTP ${response.status} (blocked at ${edge.vendor})`);
-      throw new EdgeBlockedError(response.status, edge.vendor, {
-        service: 'OneHome GraphQL',
-        method: 'POST',
-        path: `/graphql (${req.operationName})`,
-      });
-    }
-    if (response.status === 401 || response.status === 403) {
-      // Captured token has been revoked — discard and try once more.
-      this.dropToken();
-      this.recordFailure(`HTTP ${response.status}`);
-      throw new Error(
-        `OneHome GraphQL rejected the captured token (HTTP ${response.status}). ` +
-          `Trigger a fresh GraphQL call from your portal.onehome.com tab and retry.`
-      );
+      // A CDN/WAF refusal page arrives as a 403 too, but the API never saw the
+      // token: keep it, rather than discarding a good capture the user has to
+      // re-trigger from the portal tab (chrischall/mcp-host#1015).
+      const edge = detectEdgeBlock({ body: text, headers: response.headers, status: response.status });
+      if (edge !== null) {
+        this.recordFailure(`HTTP ${response.status} (blocked at ${edge.vendor})`);
+        throw new EdgeBlockedError(response.status, edge.vendor, {
+          service: 'OneHome GraphQL',
+          method: 'POST',
+          path: `/graphql (${req.operationName})`,
+        });
+      }
+      if (response.status === 401 || response.status === 403) {
+        // Captured token has been revoked — discard it; recapture and
+        // retry once, then give up.
+        this.dropToken();
+        this.recordFailure(`HTTP ${response.status}`);
+        if (attempt === 0) continue;
+        throw new Error(
+          `OneHome GraphQL rejected the captured token (HTTP ${response.status}). ` +
+            `Trigger a fresh GraphQL call from your portal.onehome.com tab and retry.`
+        );
+      }
+      break;
     }
     let parsed: { data?: T; errors?: GraphQLResponse<T>['errors'] };
     try {
@@ -370,8 +378,7 @@ export class FetchproxyTransport implements OneHomeTransport {
   async rest<T = unknown>(path: string): Promise<RestResponse<T>> {
     const normalized = path.startsWith('/') ? path : `/${path}`;
     const url = `${REST_BASE}${normalized}`;
-    // 401/403 means the captured bearer was revoked. Mirror graphql()'s
-    // recapture intent on this path too: drop the dead token, recapture,
+    // 401/403 means the captured bearer was revoked. Same as graphql(): drop the dead token, recapture,
     // and retry the request once so a stale capture self-heals. A
     // *persistent* 401/403 (e.g. the agent-only LocalLogic schools
     // dataset, which a fresh token still can't reach) falls through and
