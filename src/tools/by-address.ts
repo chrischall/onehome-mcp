@@ -234,14 +234,18 @@ export async function resolveByAddressOnce(
       matched_via: 'suggestions',
     };
   }
-  // Rung 2: search-fallback. Pulls savedSearchId from the same session
-  // context the caller's groupId came from when not explicitly passed.
+  // Rung 2: search-fallback. The session's savedSearchId is scoped to the
+  // session's own group, so only pair it with `groupId` when they match
+  // (mirrors search.ts) — an explicit group_id for another group falls
+  // back to that group's raw listings pool instead.
   const ctx = client.bridgeStatus().sessionContext;
+  const savedSearchId =
+    ctx.savedSearchId && ctx.groupId === groupId ? ctx.savedSearchId : undefined;
   const hit = await searchFallback(
     client,
     input,
     groupId,
-    ctx.savedSearchId,
+    savedSearchId,
     poolCache
   );
   if (hit) {
