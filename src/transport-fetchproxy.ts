@@ -63,9 +63,10 @@ const USER_AGENT =
  * The fetchproxy WebSocket port from `ONEHOME_WS_PORT`, validated by
  * mcp-utils' `readPortEnv` (fleet-audit#1081): an integer in 1..65535, with
  * blank / `undefined` / unsubstituted `${…}` placeholders treated as unset.
- * Anything else yields `undefined`, so the server falls back to
- * fetchproxy's own default (`FETCHPROXY_WS_PORT`, else 37149) instead of
- * being handed `NaN` (the old `Number(env)`).
+ * Anything else yields `undefined`, so the transport falls back to
+ * `DEFAULT_PORT` (37149) instead of being handed `NaN` (the old
+ * `Number(env)`). The port is always passed explicitly, so fetchproxy's own
+ * `FETCHPROXY_WS_PORT` fallback never applies here.
  */
 export function wsPortFromEnv(env: EnvSource = process.env): number | undefined {
   // 0 is outside readPortEnv's valid range, so it can only mean "no port".

@@ -34,7 +34,11 @@
       ],
       "env": {
         "ONEHOME_MAGIC_LINK": "${user_config.onehome_magic_link}",
-        "ONEHOME_TOKEN": "${user_config.onehome_token}"
+        "ONEHOME_TOKEN": "${user_config.onehome_token}",
+        "ONEHOME_WS_PORT": "${user_config.onehome_ws_port}",
+        "ONEHOME_COMMUNITIES_FILE": "${user_config.onehome_communities_file}",
+        "FETCHPROXY_WS_HOST": "${user_config.fetchproxy_ws_host}",
+        "FETCHPROXY_IDENTITY_DIR": "${user_config.fetchproxy_identity_dir}"
       }
     }
   },
@@ -52,6 +56,30 @@
       "description": "A raw OneHome bearer (session JWT) copied from the portal's network requests. Optional, and takes precedence over the magic link when both are set.",
       "required": false,
       "sensitive": true
+    },
+    "onehome_ws_port": {
+      "type": "string",
+      "title": "fetchproxy port (advanced)",
+      "description": "Override the fetchproxy WebSocket port (default 37149). Only used when ONEHOME_TOKEN / ONEHOME_MAGIC_LINK are unset and the MCP boots in capture-from-tab mode.",
+      "required": false
+    },
+    "onehome_communities_file": {
+      "type": "file",
+      "title": "Community vocabulary file (advanced)",
+      "description": "Path to a JSON array of community names used for feature extraction; overrides the built-in Lake Lure / mountain-NC default vocabulary.",
+      "required": false
+    },
+    "fetchproxy_ws_host": {
+      "type": "string",
+      "title": "fetchproxy bind address (advanced)",
+      "description": "Bind interface for the fetchproxy concentrator, a literal IP only (default 127.0.0.1). Keep on loopback; it exists for hosted deployments that run each MCP in its own network namespace.",
+      "required": false
+    },
+    "fetchproxy_identity_dir": {
+      "type": "directory",
+      "title": "fetchproxy identity directory (advanced)",
+      "description": "Absolute path where the fetchproxy long-term identity keypair is stored (default ~/.fetchproxy/identity/).",
+      "required": false
     }
   },
   "tools": [
