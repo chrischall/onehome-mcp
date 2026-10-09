@@ -238,7 +238,7 @@ export async function resolveByAddressOnce(
   // session's own group, so only pair it with `groupId` when they match
   // (mirrors search.ts) — an explicit group_id for another group falls
   // back to that group's raw listings pool instead.
-  const ctx = client.bridgeStatus().sessionContext;
+  const ctx = client.sessionContextForIds({ groupId });
   const savedSearchId =
     ctx.savedSearchId && ctx.groupId === groupId ? ctx.savedSearchId : undefined;
   const hit = await searchFallback(
@@ -339,7 +339,7 @@ export function registerByAddressTools(
     // sending `view=compact` to a live API the moment its builder began
     // iterating its argument. Removing the key here removes the possibility.
     async ({ view, ...input }) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      const ctx = client.sessionContextForIds({ groupId: input.group_id });
       const groupId = input.group_id ?? ctx.groupId;
       const result = await resolveByAddressOnce(client, input, groupId);
       return viewResponse(view, result);

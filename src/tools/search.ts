@@ -78,7 +78,12 @@ export function registerSearchTools(
       }),
     },
     async (i) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      // Defaults come from the session that owns the supplied id (it also
+      // answers the request), not the active one (fleet-audit#1077).
+      const ctx = client.sessionContextForIds({
+        groupId: i.group_id,
+        savedSearchId: i.saved_search_id,
+      });
       const resolvedGroupId: string | undefined = i.group_id ?? ctx.groupId;
       if (!resolvedGroupId) {
         throw new Error(
@@ -235,7 +240,7 @@ export function registerSearchTools(
       }),
     },
     async (i) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      const ctx = client.sessionContextForIds({ groupId: i.group_id });
       const data = await client.graphql<{
         listingSuggestionsSearch?: SuggestionEntry[];
       }>(
