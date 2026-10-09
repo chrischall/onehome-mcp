@@ -28,7 +28,7 @@ import { FetchproxyTransport, wsPortFromEnv } from './transport-fetchproxy.js';
 import { TOOL_REGISTRARS } from './tools/register-all.js';
 import type { OneHomeTransport } from './transport.js';
 
-const VERSION = '1.1.7'; // x-release-please-version
+const VERSION = '1.1.8'; // x-release-please-version
 
 // Local-dev convenience: load a `.env` if present. No-op (and never throws)
 // inside an mcpb bundle where creds arrive via the host's mcp_config.env.
