@@ -43,6 +43,23 @@ describe('tryBuildDirectTransportFromEnv', () => {
     ).toThrow(/no `token` query parameter/);
   });
 
+  it('treats unsubstituted .mcpb ${user_config.*} placeholders as unset', () => {
+    expect(
+      tryBuildDirectTransportFromEnv({
+        ONEHOME_TOKEN: '${user_config.onehome_token}',
+        ONEHOME_MAGIC_LINK: '${user_config.onehome_magic_link}',
+      })
+    ).toBeNull();
+  });
+
+  it('falls through an empty ONEHOME_TOKEN to ONEHOME_MAGIC_LINK', () => {
+    const out = tryBuildDirectTransportFromEnv({
+      ONEHOME_TOKEN: '',
+      ONEHOME_MAGIC_LINK: `https://portal.onehome.com/?token=${FAKE_JWT}`,
+    });
+    expect(out?.authMode).toBe('magic_link');
+  });
+
   it('returns null when neither env var is set', () => {
     expect(tryBuildDirectTransportFromEnv({})).toBeNull();
   });

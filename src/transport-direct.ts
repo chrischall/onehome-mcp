@@ -18,7 +18,7 @@
  * scope the agent shared with this consumer).
  */
 
-import { detectEdgeBlock, EdgeBlockedError } from '@chrischall/mcp-utils';
+import { detectEdgeBlock, EdgeBlockedError, readEnvVar } from '@chrischall/mcp-utils';
 import {
   decodeJwtExpiresAtMs,
   exchangeEmailToken,
@@ -75,15 +75,17 @@ export function tryBuildDirectTransportFromEnv(env: NodeJS.ProcessEnv): {
   transport: DirectTransport;
   authMode: 'env_token' | 'magic_link';
 } | null {
-  const envToken = env.ONEHOME_TOKEN?.trim();
-  if (envToken && envToken.length > 0) {
+  // readEnvVar treats empty values and unsubstituted .mcpb
+  // `${user_config.*}` placeholders as unset (fleet-audit#618).
+  const envToken = readEnvVar('ONEHOME_TOKEN', { env });
+  if (envToken) {
     return {
       transport: new DirectTransport({ token: envToken, authMode: 'env_token' }),
       authMode: 'env_token',
     };
   }
-  const link = env.ONEHOME_MAGIC_LINK?.trim();
-  if (link && link.length > 0) {
+  const link = readEnvVar('ONEHOME_MAGIC_LINK', { env });
+  if (link) {
     const linkToken = extractTokenFromMagicLink(link);
     if (!linkToken) {
       throw new Error(
