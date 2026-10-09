@@ -33,6 +33,9 @@ export function registerAuthTools(
       annotations: {
         title: 'Register an additional OneHome session at runtime',
         readOnlyHint: false,
+        // No tool here unregisters a session, and the added one changes
+        // `~MLS` routing (two shares in one MLS make a request error), so
+        // there is no inverse.
         destructiveHint: true,
         idempotentHint: false,
         openWorldHint: true,
@@ -71,7 +74,9 @@ export function registerAuthTools(
       annotations: {
         title: 'Switch which registered OneHome session is active',
         readOnlyHint: false,
-        destructiveHint: true,
+        // Inverse test: it only moves the process-local active pointer, and
+        // calling this tool again with the previous session_id restores it.
+        destructiveHint: false,
         idempotentHint: true,
         openWorldHint: false,
       },
