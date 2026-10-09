@@ -135,7 +135,7 @@ export function registerResolveAddressesTools(
       }),
     },
     async (input) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      const ctx = client.sessionContextForIds({ groupId: input.group_id });
       const groupId = input.group_id ?? ctx.groupId;
       const inputs = input.addresses as ByAddressInput[];
       // Memoize the search-fallback pool across the whole batch: every row

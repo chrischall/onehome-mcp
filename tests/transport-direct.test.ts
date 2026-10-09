@@ -43,6 +43,23 @@ describe('tryBuildDirectTransportFromEnv', () => {
     ).toThrow(/no `token` query parameter/);
   });
 
+  it('treats unsubstituted .mcpb ${user_config.*} placeholders as unset', () => {
+    expect(
+      tryBuildDirectTransportFromEnv({
+        ONEHOME_TOKEN: '${user_config.onehome_token}',
+        ONEHOME_MAGIC_LINK: '${user_config.onehome_magic_link}',
+      })
+    ).toBeNull();
+  });
+
+  it('falls through an empty ONEHOME_TOKEN to ONEHOME_MAGIC_LINK', () => {
+    const out = tryBuildDirectTransportFromEnv({
+      ONEHOME_TOKEN: '',
+      ONEHOME_MAGIC_LINK: `https://portal.onehome.com/?token=${FAKE_JWT}`,
+    });
+    expect(out?.authMode).toBe('magic_link');
+  });
+
   it('returns null when neither env var is set', () => {
     expect(tryBuildDirectTransportFromEnv({})).toBeNull();
   });
@@ -138,5 +155,134 @@ describe('DirectTransport.graphql', () => {
     });
     expect(transport.status().lastSuccessAt).toBeTypeOf('number');
     expect(transport.status().consecutiveFailures).toBe(0);
+  });
+});
+
+/**
+ * fleet-audit#617: an email-token (magic-link) session re-exchanges the
+ * retained email-token when the exchanged sessionToken expires, instead of
+ * dying with TokenExpiredError; and concurrent first calls share one
+ * checkToken exchange.
+ */
+describe('DirectTransport — email-token re-exchange', () => {
+  const jwtWithExp = (expSec: number): string => {
+    const b = Buffer.from(JSON.stringify({ exp: expSec }))
+      .toString('base64')
+      .replace(/=+$/, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    return `eyJhbGciOiJIUzI1NiJ9.${b}.sig`;
+  };
+  const past = () => jwtWithExp(Math.floor(Date.now() / 1000) - 60);
+  const future = () => jwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+
+  function stub(sessionTokens: Array<string | Response>) {
+    const tokens = [...sessionTokens];
+    let checkTokenCalls = 0;
+    const fetchImpl = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/checkToken')) {
+        checkTokenCalls += 1;
+        const next = tokens.shift();
+        if (next instanceof Response) return next;
+        return jsonResponse({ sessionToken: next, groupID: 'G1' });
+      }
+      return jsonResponse({ data: { auth: (init?.headers as Record<string, string>).Authorization } });
+    });
+    return { fetchImpl, checkTokenCalls: () => checkTokenCalls };
+  }
+
+  it('re-exchanges the email-token once the session JWT has expired', async () => {
+    const fresh = future();
+    const { fetchImpl, checkTokenCalls } = stub([past(), fresh]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await t.start();
+    const res = await t.graphql<{ auth: string }>({ operationName: 'Op', query: 'q' });
+    expect(checkTokenCalls()).toBe(2);
+    expect(res.data?.auth).toBe(`Bearer ${fresh}`);
+    const rest = await t.rest<{ data: { auth: string } }>('/x');
+    expect(rest.status).toBe(200);
+    expect(checkTokenCalls()).toBe(2);
+  });
+
+  it('re-exchanges on rest() too', async () => {
+    const { fetchImpl, checkTokenCalls } = stub([past(), future()]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await t.start();
+    const res = await t.rest('/x');
+    expect(res.status).toBe(200);
+    expect(checkTokenCalls()).toBe(2);
+  });
+
+  it('throws TokenExpiredError when the re-exchange fails', async () => {
+    const { fetchImpl } = stub([past(), new Response('nope', { status: 401 })]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await t.start();
+    await expect(t.graphql({ operationName: 'Op', query: 'q' })).rejects.toMatchObject({
+      name: 'TokenExpiredError',
+    });
+  });
+
+  it('throws TokenExpiredError when the re-exchanged token is still expired', async () => {
+    const { fetchImpl } = stub([past(), past()]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await t.start();
+    await expect(t.graphql({ operationName: 'Op', query: 'q' })).rejects.toMatchObject({
+      name: 'TokenExpiredError',
+    });
+  });
+
+  it('shares one re-exchange between concurrent callers', async () => {
+    const { fetchImpl, checkTokenCalls } = stub([past(), future()]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await t.start();
+    await Promise.all(
+      Array.from({ length: 6 }, () => t.graphql({ operationName: 'Op', query: 'q' }))
+    );
+    expect(checkTokenCalls()).toBe(2);
+  });
+
+  it('memoizes the in-flight start() so a concurrent fan-out fires one checkToken', async () => {
+    const { fetchImpl, checkTokenCalls } = stub([future()]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await Promise.all(
+      Array.from({ length: 6 }, () => t.graphql({ operationName: 'Op', query: 'q' }))
+    );
+    expect(checkTokenCalls()).toBe(1);
+  });
+
+  it('clears the memoized start() after a failed exchange so the next call retries', async () => {
+    const { fetchImpl, checkTokenCalls } = stub([new Response('down', { status: 500 }), future()]);
+    const t = new DirectTransport({
+      token: 'eyJPU04iOiJYIn0',
+      authMode: 'magic_link',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(t.start()).rejects.toThrow();
+    await t.graphql({ operationName: 'Op', query: 'q' });
+    expect(checkTokenCalls()).toBe(2);
   });
 });

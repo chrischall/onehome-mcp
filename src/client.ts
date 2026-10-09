@@ -26,6 +26,13 @@
  * - if several non-active sessions match, routing is ambiguous and the
  *   request throws, naming the candidates.
  *
+ * Before the `~MLS` rule, a `savedSearchId` / `searchId` or `groupId`
+ * variable is matched against each session's context (those ids are
+ * unique per share): the active session wins if it owns the id, else the
+ * single other owner answers. Tools default the missing id from
+ * `sessionContextForIds` so a request never pairs one share's id with
+ * another share's bearer.
+ *
  * No suffix, or no matching session: the active session answers. See
  * `routeFor` for the implementation.
  */
@@ -252,6 +259,11 @@ export class OneHomeClient {
       );
     }
     if (this.sessions.size > 1) {
+      // Scope ids first (fleet-audit#1077): a saved-search or group id is
+      // unique to the share that issued it, so it identifies the session
+      // whose bearer can read it more precisely than an MLS suffix does.
+      const scoped = this.routeByScope(active, variables);
+      if (scoped) return scoped;
       const mls = extractRoutingMls(variables);
       if (mls) {
         const want = mls.toUpperCase();
@@ -270,6 +282,53 @@ export class OneHomeClient {
       }
     }
     return active;
+  }
+
+  /**
+   * Route on a request's saved-search id (`savedSearchId` / `searchId`)
+   * or `groupId` variable: the active session wins when its context owns
+   * the id, else the single other session that owns it. No owner, or
+   * several non-active owners: null, so the caller falls through to the
+   * `~MLS` rule / the active session.
+   */
+  private routeByScope(
+    active: OneHomeTransport,
+    variables: Record<string, unknown> | undefined
+  ): OneHomeTransport | null {
+    if (!variables) return null;
+    const ssId =
+      typeof variables.savedSearchId === 'string'
+        ? variables.savedSearchId
+        : typeof variables.searchId === 'string'
+          ? variables.searchId
+          : undefined;
+    const groupId = typeof variables.groupId === 'string' ? variables.groupId : undefined;
+    const keys: Array<[keyof SessionContext, string | undefined]> = [
+      ['savedSearchId', ssId],
+      ['groupId', groupId],
+    ];
+    for (const [field, want] of keys) {
+      if (!want) continue;
+      const owns = (t: OneHomeTransport): boolean => t.status().sessionContext[field] === want;
+      if (owns(active)) return active;
+      const owners = Array.from(this.sessions.values()).filter(owns);
+      if (owners.length === 1) return owners[0]!;
+    }
+    return null;
+  }
+
+  /**
+   * Session context of the session that owns the given group /
+   * saved-search id (see `routeByScope`), else the active one. Tools that
+   * take a `group_id` / `saved_search_id` must default the OTHER id from
+   * this — a saved search from session 2 paired with session 1's group
+   * (or sent with session 1's bearer) is "Access Denied" upstream.
+   */
+  sessionContextForIds(ids: { groupId?: string; savedSearchId?: string }): SessionContext {
+    const variables: Record<string, unknown> = {};
+    if (ids.groupId) variables.groupId = ids.groupId;
+    if (ids.savedSearchId) variables.savedSearchId = ids.savedSearchId;
+    return this.routeFor(variables).status().sessionContext;
   }
 
   /**

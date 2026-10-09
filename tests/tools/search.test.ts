@@ -274,6 +274,82 @@ describe('search tool — groups + saved searches', () => {
     expect(result.saved_search_id).toBe('ss-ctx');
   });
 
+  it('flags the response when it fell back to the saved-search path', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-ctx' },
+    });
+    transport.on('GetListings', () =>
+      ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-ctx', listingIds: ['X'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({
+        listingsBySavedSearchId: {
+          pageInfo: { totalElements: 1 },
+          listings: [sampleListing('X', 100000)],
+        },
+      })
+    );
+    const result = (await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-ctx',
+    })) as SearchResult & { fell_back_to_saved_search?: boolean };
+    expect(result.fell_back_to_saved_search).toBe(true);
+  });
+
+  it('returns an empty page (no saved-search swap) when a later raw page is legitimately empty', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-ctx' },
+    });
+    transport.on('GetListings', () =>
+      ok({ listings: { pageInfo: { totalElements: 120, totalPages: 3 }, listings: [] } })
+    );
+    const result = (await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-ctx',
+      page_num: 3,
+    })) as SearchResult & { fell_back_to_saved_search?: boolean };
+    expect(result.count).toBe(0);
+    expect(result.listings).toEqual([]);
+    expect(result.saved_search_id).toBeUndefined();
+    expect(result.fell_back_to_saved_search).toBeUndefined();
+    expect(transport.calls.map((c) => c.operationName)).toEqual(['GetListings']);
+  });
+
+  it('returns an empty page when page 0 is empty but the group reports results', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-ctx' },
+    });
+    transport.on('GetListings', () =>
+      ok({ listings: { pageInfo: { totalElements: 7 }, listings: [] } })
+    );
+    const result = await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-ctx',
+    });
+    expect(result.count).toBe(0);
+    expect(transport.calls.map((c) => c.operationName)).toEqual(['GetListings']);
+  });
+
+  it('returns an empty page instead of the consumer-share error on a later page', async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({ authMode: 'env_token', sessionContext: { groupId: 'g-agent' } });
+    transport.on('GetListings', () =>
+      ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } })
+    );
+    const result = await runTool(transport, 'onehome_search_properties', {
+      group_id: 'g-agent',
+      page_num: 2,
+    });
+    expect(result.count).toBe(0);
+    expect(result.listings).toEqual([]);
+  });
+
   it('does NOT fall back when the raw listings call returns non-zero results', async () => {
     const transport = new FakeTransport();
     transport.setStatus({

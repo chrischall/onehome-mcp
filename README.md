@@ -52,7 +52,7 @@ ContextMint Bridge is the fetchproxy browser extension under its new name, from 
 
 ## Install
 
-The simplest path is the published Claude plugin (`.mcpb` install). For local dev:
+The simplest path is the published Claude plugin (`.mcpb` install). Its settings take an optional **OneHome magic link** or **bearer token** (both stored as sensitive values); leave both blank to use browser-bridge capture instead. For local dev:
 
 ```bash
 git clone https://github.com/chrischall/onehome-mcp

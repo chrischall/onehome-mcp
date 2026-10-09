@@ -442,6 +442,53 @@ describe('onehome_get_by_address — search-fallback rung', () => {
     expect(result.matched_via).toBe('search_fallback');
   });
 
+  it("does not pair an explicit group_id with the session's saved_search_id from another group", async () => {
+    const transport = new FakeTransport();
+    transport.setStatus({
+      authMode: 'magic_link',
+      sessionContext: { groupId: 'g-ctx', savedSearchId: 'ss-1' },
+    });
+    transport.on('ListingSuggestionsSearch', () =>
+      ok({ listingSuggestionsSearch: [] })
+    );
+    transport.on('GetSavedSearchBySearchId', () =>
+      ok({ savedSearch: { id: 'ss-1', listingIds: ['WRONG'] } })
+    );
+    transport.on('GetSavedListings', () =>
+      ok({ listingsBySavedSearchId: { listings: [] } })
+    );
+    transport.on('GetListings', (variables) => {
+      expect(variables.groupId).toBe('g-other');
+      return ok({
+        listings: {
+          listings: [
+            {
+              id: 'OTHER_HIT',
+              property: {
+                StreetNumber: '181',
+                StreetName: 'Highland',
+                StreetSuffix: 'Heights',
+                City: 'Lake Lure',
+                StateOrProvince: 'NC',
+              },
+            },
+          ],
+        },
+      });
+    });
+    const result = await callBy(transport, {
+      address: '181 Highland Heights',
+      city: 'Lake Lure',
+      state: 'NC',
+      group_id: 'g-other',
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.listing_id).toBe('OTHER_HIT');
+    const calls = transport.calls.map((c) => c.operationName);
+    expect(calls).not.toContain('GetSavedSearchBySearchId');
+    expect(calls).not.toContain('GetSavedListings');
+  });
+
   it('returns resolved:false when both rungs miss', async () => {
     const transport = new FakeTransport();
     transport.setStatus({

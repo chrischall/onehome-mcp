@@ -5,6 +5,10 @@ import { registerPropertyTools } from '../../src/tools/properties.js';
 import { registerBulkGetTools } from '../../src/tools/bulk-get.js';
 import { registerCompareTools } from '../../src/tools/compare.js';
 import { registerPhotosTools } from '../../src/tools/photos.js';
+import { registerSavedTools } from '../../src/tools/saved.js';
+import { registerSavedWithListingsTools } from '../../src/tools/saved-with-listings.js';
+import { registerSearchTools } from '../../src/tools/search.js';
+import { registerByAddressTools } from '../../src/tools/by-address.js';
 import { FakeTransport, ok, createTestHarness } from '../helpers.js';
 import type { BridgeStatus } from '../../src/transport.js';
 
@@ -232,5 +236,105 @@ describe('duplicate-MLS sessions', () => {
     const { client } = twoCanopy();
     // session-1 (CANOPY, G-A) is active; ~HCAOR has one match.
     expect(client.sessionContextFor('xyz~HCAOR').groupId).toBe('G-H');
+  });
+});
+
+/**
+ * Regression for chrischall/fleet-audit#1077: a group / saved-search id
+ * belonging to a NON-active session must be sent with THAT session's
+ * bearer (and defaults must come from that session's context), not the
+ * active session's.
+ */
+describe('group / saved-search id routing', () => {
+  function scoped(): { client: OneHomeClient; canopy: FakeTransport; hcaor: FakeTransport } {
+    const { client, canopy, hcaor } = twoSessions();
+    for (const [t, g, s] of [
+      [canopy, 'G-CANOPY', 'S-CANOPY'],
+      [hcaor, 'G-HCAOR', 'S-HCAOR'],
+    ] as const) {
+      t.on('GetSavedSearchBySearchId', (v) => {
+        expect(v.searchId).toBe(s);
+        return ok({ savedSearch: { id: s, name: s, listingIds: [`l~${g}`] } });
+      });
+      t.on('GetSavedListings', (v) => {
+        expect(v.groupId).toBe(g);
+        expect(v.savedSearchId).toBe(s);
+        return ok({ listingsBySavedSearchId: { pageInfo: {}, listings: [listing(`l-${g}`)] } });
+      });
+      t.on('GetListings', () => ok({ listings: { pageInfo: { totalElements: 0 }, listings: [] } }));
+      t.on('ListingSuggestionsSearch', () => ok({ listingSuggestionsSearch: [] }));
+    }
+    return { client, canopy, hcaor };
+  }
+
+  it('routes a request carrying another session’s savedSearchId / searchId / groupId to it', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await client.graphql({ operationName: 'GetSavedSearchBySearchId', query: 'q', variables: { searchId: 'S-HCAOR' } });
+    await client.graphql({ operationName: 'GetListings', query: 'q', variables: { groupId: 'G-HCAOR' } });
+    expect(canopy.calls).toHaveLength(0);
+    expect(hcaor.calls.map((c) => c.operationName)).toEqual(['GetSavedSearchBySearchId', 'GetListings']);
+  });
+
+  it('falls back to the active session for ids no session owns', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await client.graphql({ operationName: 'GetListings', query: 'q', variables: { groupId: 'G-UNKNOWN' } });
+    expect(canopy.calls).toHaveLength(1);
+    expect(hcaor.calls).toHaveLength(0);
+  });
+
+  it('client.sessionContextForIds resolves the owning session context', () => {
+    const { client } = scoped();
+    expect(client.sessionContextForIds({ savedSearchId: 'S-HCAOR' }).groupId).toBe('G-HCAOR');
+    expect(client.sessionContextForIds({ groupId: 'G-HCAOR' }).savedSearchId).toBe('S-HCAOR');
+    expect(client.sessionContextForIds({}).groupId).toBe('G-CANOPY');
+    expect(client.sessionContextForIds({ groupId: 'nope' }).groupId).toBe('G-CANOPY');
+  });
+
+  it('onehome_get_saved_search fetches a non-active session’s saved search with its bearer', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await call(client, registerSavedTools, 'onehome_get_saved_search', { saved_search_id: 'S-HCAOR' });
+    expect(canopy.calls).toHaveLength(0);
+    expect(hcaor.calls).toHaveLength(1);
+  });
+
+  it('onehome_get_saved_search_with_listings defaults group_id from the owning session', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await call(client, registerSavedWithListingsTools, 'onehome_get_saved_search_with_listings', {
+      saved_search_id: 'S-HCAOR',
+    });
+    expect(canopy.calls).toHaveLength(0);
+    expect(hcaor.calls.map((c) => c.operationName)).toEqual(['GetSavedSearchBySearchId', 'GetSavedListings']);
+  });
+
+  it('onehome_search_properties routes by saved_search_id and defaults group_id from that session', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await call(client, registerSearchTools, 'onehome_search_properties', { saved_search_id: 'S-HCAOR' });
+    expect(canopy.calls).toHaveLength(0);
+    expect(hcaor.calls.map((c) => c.operationName)).toEqual(['GetSavedSearchBySearchId', 'GetSavedListings']);
+  });
+
+  it('onehome_search_properties with another session’s group_id falls back to that session’s saved search', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await call(client, registerSearchTools, 'onehome_search_properties', { group_id: 'G-HCAOR' });
+    expect(canopy.calls).toHaveLength(0);
+    expect(hcaor.calls.map((c) => c.operationName)).toEqual([
+      'GetListings',
+      'GetSavedSearchBySearchId',
+      'GetSavedListings',
+    ]);
+  });
+
+  it('onehome_get_by_address with another session’s group_id walks that session’s pool', async () => {
+    const { client, canopy, hcaor } = scoped();
+    await call(client, registerByAddressTools, 'onehome_get_by_address', {
+      address: '1 Nowhere Rd',
+      group_id: 'G-HCAOR',
+    });
+    expect(canopy.calls).toHaveLength(0);
+    expect(hcaor.calls.map((c) => c.operationName)).toEqual([
+      'ListingSuggestionsSearch',
+      'GetSavedSearchBySearchId',
+      'GetSavedListings',
+    ]);
   });
 });

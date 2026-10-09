@@ -18,7 +18,7 @@
  * scope the agent shared with this consumer).
  */
 
-import { detectEdgeBlock, EdgeBlockedError } from '@chrischall/mcp-utils';
+import { detectEdgeBlock, EdgeBlockedError, readEnvVar } from '@chrischall/mcp-utils';
 import {
   decodeJwtExpiresAtMs,
   exchangeEmailToken,
@@ -75,15 +75,17 @@ export function tryBuildDirectTransportFromEnv(env: NodeJS.ProcessEnv): {
   transport: DirectTransport;
   authMode: 'env_token' | 'magic_link';
 } | null {
-  const envToken = env.ONEHOME_TOKEN?.trim();
-  if (envToken && envToken.length > 0) {
+  // readEnvVar treats empty values and unsubstituted .mcpb
+  // `${user_config.*}` placeholders as unset (fleet-audit#618).
+  const envToken = readEnvVar('ONEHOME_TOKEN', { env });
+  if (envToken) {
     return {
       transport: new DirectTransport({ token: envToken, authMode: 'env_token' }),
       authMode: 'env_token',
     };
   }
-  const link = env.ONEHOME_MAGIC_LINK?.trim();
-  if (link && link.length > 0) {
+  const link = readEnvVar('ONEHOME_MAGIC_LINK', { env });
+  if (link) {
     const linkToken = extractTokenFromMagicLink(link);
     if (!linkToken) {
       throw new Error(
@@ -112,6 +114,10 @@ export class DirectTransport implements OneHomeTransport {
   private lastFailureReason: string | null = null;
   private consecutiveFailures = 0;
   private bootstrapped = false;
+  /** In-flight first exchange, shared by concurrent callers; cleared on rejection. */
+  private startPromise: Promise<void> | null = null;
+  /** In-flight expiry re-exchange, shared by concurrent callers. */
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(opts: DirectTransportOptions) {
     if (!opts.token || opts.token.length === 0) {
@@ -135,7 +141,20 @@ export class DirectTransport implements OneHomeTransport {
 
   async start(): Promise<void> {
     if (this.bootstrapped) return;
-    // Email-token path: exchange for a sessionToken + session context.
+    // Memoize the in-flight exchange so a concurrent fan-out (bulk_get's
+    // 6 workers) fires one checkToken, not six. Cleared on rejection so
+    // the next call retries (fleet-audit#617).
+    if (!this.startPromise) {
+      this.startPromise = this.exchange().catch((err: unknown) => {
+        this.startPromise = null;
+        throw err;
+      });
+    }
+    return this.startPromise;
+  }
+
+  /** Email-token path: exchange for a sessionToken + session context. */
+  private async exchange(): Promise<void> {
     const check = await exchangeEmailToken(this.inputToken, this.fetchImpl);
     this.bearerToken = check.sessionToken;
     this.bearerExpiresAt = decodeJwtExpiresAtMs(check.sessionToken);
@@ -148,6 +167,35 @@ export class DirectTransport implements OneHomeTransport {
       ...(check.email ? { email: check.email } : {}),
     };
     this.bootstrapped = true;
+  }
+
+  /**
+   * Bootstrap if needed, then make sure the bearer isn't past its `exp`.
+   * A JWT pasted directly can't be refreshed, so it throws
+   * `TokenExpiredError`. An email-token (magic link) is longer-lived than
+   * the session JWT it was exchanged for — the portal itself re-exchanges
+   * it on load — so re-run checkToken once (shared between concurrent
+   * callers) and only throw if that fails or still yields an expired
+   * token (fleet-audit#617).
+   */
+  private async ensureFreshBearer(): Promise<void> {
+    if (!this.bootstrapped) await this.start();
+    const expired = (): boolean =>
+      this.bearerExpiresAt !== null && this.bearerExpiresAt < Date.now();
+    if (!expired()) return;
+    const expiredAt = this.bearerExpiresAt as number;
+    if (isJwtShape(this.inputToken)) throw new TokenExpiredError(expiredAt);
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.exchange().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    try {
+      await this.refreshPromise;
+    } catch {
+      throw new TokenExpiredError(expiredAt);
+    }
+    if (expired()) throw new TokenExpiredError(this.bearerExpiresAt as number);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function -- no-op
@@ -178,10 +226,7 @@ export class DirectTransport implements OneHomeTransport {
   }
 
   async graphql<T = unknown>(req: GraphQLRequest): Promise<GraphQLResponse<T>> {
-    if (!this.bootstrapped) await this.start();
-    if (this.bearerExpiresAt !== null && this.bearerExpiresAt < Date.now()) {
-      throw new TokenExpiredError(this.bearerExpiresAt);
-    }
+    await this.ensureFreshBearer();
     const body = JSON.stringify({
       operationName: req.operationName,
       query: req.query,
@@ -261,10 +306,7 @@ export class DirectTransport implements OneHomeTransport {
   }
 
   async rest<T = unknown>(path: string): Promise<RestResponse<T>> {
-    if (!this.bootstrapped) await this.start();
-    if (this.bearerExpiresAt !== null && this.bearerExpiresAt < Date.now()) {
-      throw new TokenExpiredError(this.bearerExpiresAt);
-    }
+    await this.ensureFreshBearer();
     const normalized = path.startsWith('/') ? path : `/${path}`;
     const url = `${REST_BASE}${normalized}`;
     let response: Response;

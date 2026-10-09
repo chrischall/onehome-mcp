@@ -57,7 +57,7 @@ export function registerSearchTools(
     {
       title: 'Search listings inside a OneHome group / saved share',
       description:
-        "Fetch listings inside a OneHome consumer-share. Two modes:\n\n  - With `saved_search_id`: fetch the agent-curated collection (the standard 'Homes at <name>' view). The MCP first resolves the saved search's listingIds and then inflates them via listingsBySavedSearchId — this is the only mode that works for non-agent consumer accounts.\n  - With just `group_id` and no `saved_search_id`: try the raw `listings(groupId, browseParameter)` endpoint. If that returns 0 (the access-restricted shape consumer-shares hit) AND the session context has a `savedSearchId`, the tool transparently falls back to the saved-search path. If there's no fallback target it raises a clear error rather than silently returning empty.\n\nBoth args default from the MCP's bootstrapped session context (the magic-link checkToken response) when neither is passed explicitly. Sort is `MajorChangeTimestamp DESC` ('Newest') unless overridden. `include_dislikes: false` by default — flip it on to include listings you've thumbs-downed in OneHome.\n\nListings here are returned via the GraphQL listing-card projection, which does NOT include `PublicRemarks` — so there is no `description` field on search results and no `include_description` flag to opt into one. Each listing carries the structured `extracted_features` object instead. Use `onehome_get_property(listing_id)` per row when you need the full description for a specific listing.",
+        "Fetch listings inside a OneHome consumer-share. Two modes:\n\n  - With `saved_search_id`: fetch the agent-curated collection (the standard 'Homes at <name>' view). The MCP first resolves the saved search's listingIds and then inflates them via listingsBySavedSearchId — this is the only mode that works for non-agent consumer accounts.\n  - With just `group_id` and no `saved_search_id`: try the raw `listings(groupId, browseParameter)` endpoint. If page 0 comes back empty with no reported results (the access-restricted shape consumer-shares hit) AND the session context has a `savedSearchId` for that same group, the tool falls back to the saved-search path and marks the response `fell_back_to_saved_search: true`. If there's no fallback target it raises a clear error rather than silently returning empty. An empty later page (paging past the end) is returned as an empty page, never swapped for the saved-search collection.\n\nBoth args default from the MCP's bootstrapped session context (the magic-link checkToken response) when neither is passed explicitly. Sort is `MajorChangeTimestamp DESC` ('Newest') unless overridden. `include_dislikes: false` by default — flip it on to include listings you've thumbs-downed in OneHome.\n\nListings here are returned via the GraphQL listing-card projection, which does NOT include `PublicRemarks` — so there is no `description` field on search results and no `include_description` flag to opt into one. Each listing carries the structured `extracted_features` object instead. Use `onehome_get_property(listing_id)` per row when you need the full description for a specific listing.",
       annotations: {
         title: 'Search listings inside a OneHome group / saved share',
         readOnlyHint: true,
@@ -78,7 +78,12 @@ export function registerSearchTools(
       }),
     },
     async (i) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      // Defaults come from the session that owns the supplied id (it also
+      // answers the request), not the active one (fleet-audit#1077).
+      const ctx = client.sessionContextForIds({
+        groupId: i.group_id,
+        savedSearchId: i.saved_search_id,
+      });
       const resolvedGroupId: string | undefined = i.group_id ?? ctx.groupId;
       if (!resolvedGroupId) {
         throw new Error(
@@ -110,8 +115,10 @@ export function registerSearchTools(
         : i.saved_search_id ?? ctx.savedSearchId;
 
       async function runSavedSearchPath(
-        ssId: string
+        ssId: string,
+        fellBack = false
       ): Promise<ReturnType<typeof minifiedResult>> {
+        const fallbackFlag = fellBack ? { fell_back_to_saved_search: true } : {};
         // 1. Fetch the saved search to get its listingIds (osks).
         const ssData = await client.graphql<{ savedSearch?: RawSavedSearch }>(
           buildGetSavedSearchBySearchId(ssId)
@@ -122,6 +129,7 @@ export function registerSearchTools(
             group_id: groupId,
             saved_search_id: ssId,
             saved_search_name: ssData.savedSearch?.name,
+            ...fallbackFlag,
             page_info: {
               totalElements: 0,
               totalPages: 0,
@@ -148,6 +156,7 @@ export function registerSearchTools(
           group_id: groupId,
           saved_search_id: ssId,
           saved_search_name: ssData.savedSearch?.name,
+          ...fallbackFlag,
           page_info: data.listingsBySavedSearchId?.pageInfo ?? null,
           count: listings.length,
           listings: listings.map((l) => formatListing(l.id ?? '', l)),
@@ -170,7 +179,15 @@ export function registerSearchTools(
         })
       );
       const listings = data.listings?.listings ?? [];
-      if (listings.length === 0) {
+      // Only an empty FIRST page of a group that reports no results at all
+      // is the consumer-share restricted shape. A later page past the end,
+      // or a group whose pageInfo says it has results, is a legitimately
+      // empty page — return it as-is rather than swapping datasets mid-
+      // pagination (fleet-audit#616).
+      const pageInfo = data.listings?.pageInfo as { totalElements?: number } | undefined;
+      const restrictedShape =
+        listings.length === 0 && pageNum === 0 && !pageInfo?.totalElements;
+      if (restrictedShape) {
         // Issue #27: consumer-share groups always return 0 from this
         // endpoint. If the magic-link session bootstrapped a savedSearchId
         // we can transparently retry against the saved-search path
@@ -183,7 +200,7 @@ export function registerSearchTools(
         // otherwise we'd inflate listings from a different group's saved
         // search than the one the caller asked for.
         if (ctx.savedSearchId && ctx.groupId === groupId) {
-          return runSavedSearchPath(ctx.savedSearchId);
+          return runSavedSearchPath(ctx.savedSearchId, true);
         }
         throw new Error(
           `onehome_search_properties: raw listings(groupId=${groupId}) returned 0 ` +
@@ -223,7 +240,7 @@ export function registerSearchTools(
       }),
     },
     async (i) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      const ctx = client.sessionContextForIds({ groupId: i.group_id });
       const data = await client.graphql<{
         listingSuggestionsSearch?: SuggestionEntry[];
       }>(

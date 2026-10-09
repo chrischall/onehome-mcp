@@ -65,7 +65,12 @@ export function registerSavedWithListingsTools(
       }),
     },
     async (i) => {
-      const ctx = client.bridgeStatus().sessionContext;
+      // Defaults come from the session that owns the supplied id, not the
+      // active one (fleet-audit#1077).
+      const ctx = client.sessionContextForIds({
+        groupId: i.group_id,
+        savedSearchId: i.saved_search_id,
+      });
       const savedSearchId = i.saved_search_id ?? ctx.savedSearchId;
       if (!savedSearchId) {
         throw new Error(

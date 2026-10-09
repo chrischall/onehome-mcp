@@ -25,22 +25,7 @@ import { runMcp, loadDotenvSafely } from '@chrischall/mcp-utils';
 import { OneHomeClient } from './client.js';
 import { tryBuildDirectTransportFromEnv } from './transport-direct.js';
 import { FetchproxyTransport, wsPortFromEnv } from './transport-fetchproxy.js';
-import { registerUserTools } from './tools/user.js';
-import { registerSavedTools } from './tools/saved.js';
-import { registerSavedWithListingsTools } from './tools/saved-with-listings.js';
-import { registerSearchTools } from './tools/search.js';
-import { registerPropertyTools } from './tools/properties.js';
-import { registerPhotosTools } from './tools/photos.js';
-import { registerCompareTools } from './tools/compare.js';
-import { registerBulkGetTools } from './tools/bulk-get.js';
-import { registerSchoolsTools } from './tools/schools.js';
-import { registerGraphqlTool } from './tools/graphql.js';
-import { registerMortgageTools } from './tools/mortgage.js';
-import { registerAffordabilityTools } from './tools/affordability.js';
-import { registerHealthcheckTools } from './tools/healthcheck.js';
-import { registerByAddressTools } from './tools/by-address.js';
-import { registerResolveAddressesTools } from './tools/resolve-addresses.js';
-import { registerAuthTools } from './tools/auth.js';
+import { TOOL_REGISTRARS } from './tools/register-all.js';
 import type { OneHomeTransport } from './transport.js';
 
 const VERSION = '1.1.7'; // x-release-please-version
@@ -89,24 +74,7 @@ await runMcp({
   name: 'onehome-mcp',
   version: VERSION,
   deps: client,
-  tools: [
-    registerUserTools,
-    registerSavedTools,
-    registerSavedWithListingsTools,
-    registerSearchTools,
-    registerPropertyTools,
-    registerPhotosTools,
-    registerCompareTools,
-    registerBulkGetTools,
-    registerSchoolsTools,
-    registerGraphqlTool,
-    (server) => registerMortgageTools(server),
-    (server) => registerAffordabilityTools(server),
-    registerHealthcheckTools,
-    registerByAddressTools,
-    registerResolveAddressesTools,
-    registerAuthTools,
-  ],
+  tools: TOOL_REGISTRARS,
   banner:
     `[onehome-mcp] v${VERSION} — ${modeBanner}. ` +
     'This project was developed and is maintained by AI (Claude). ' +

@@ -31,7 +31,27 @@
       "command": "node",
       "args": [
         "${__dirname}/dist/bundle.js"
-      ]
+      ],
+      "env": {
+        "ONEHOME_MAGIC_LINK": "${user_config.onehome_magic_link}",
+        "ONEHOME_TOKEN": "${user_config.onehome_token}"
+      }
+    }
+  },
+  "user_config": {
+    "onehome_magic_link": {
+      "type": "string",
+      "title": "OneHome magic link",
+      "description": "The full portal.onehome.com URL your agent emailed you (it contains ?token=...). Optional: if neither this nor the token is set, the server captures the bearer from a signed-in portal.onehome.com tab via the browser bridge.",
+      "required": false,
+      "sensitive": true
+    },
+    "onehome_token": {
+      "type": "string",
+      "title": "OneHome bearer token",
+      "description": "A raw OneHome bearer (session JWT) copied from the portal's network requests. Optional, and takes precedence over the magic link when both are set.",
+      "required": false,
+      "sensitive": true
     }
   },
   "tools": [
@@ -94,6 +114,30 @@
     {
       "name": "onehome_healthcheck",
       "description": "Verify auth + GraphQL reachability end-to-end"
+    },
+    {
+      "name": "onehome_get_saved_search_with_listings",
+      "description": "Fetch a saved search and its listings in one call (the \"show me my saved homes\" flow)"
+    },
+    {
+      "name": "onehome_get_by_address",
+      "description": "Resolve a street address to a OneHome listing URL and id"
+    },
+    {
+      "name": "onehome_resolve_addresses",
+      "description": "Bulk-resolve up to 100 street addresses to OneHome listing URLs and ids"
+    },
+    {
+      "name": "onehome_bulk_get",
+      "description": "Fetch up to 200 OneHome listings by id, one row per id with per-row errors"
+    },
+    {
+      "name": "onehome_set_auth",
+      "description": "Add a OneHome session from a magic-link URL or bearer token and make it active"
+    },
+    {
+      "name": "onehome_set_active_session",
+      "description": "Switch which registered OneHome session answers requests by default"
     }
   ]
 }
