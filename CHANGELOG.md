@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.9](https://github.com/chrischall/onehome-mcp/compare/v1.1.8...v1.1.9) (2026-10-16)
+
+
+### Bug Fixes
+
+* **deps:** Bump the production-dependencies group with 5 updates ([#247](https://github.com/chrischall/onehome-mcp/issues/247)) ([eb70eab](https://github.com/chrischall/onehome-mcp/commit/eb70eab07174c421ef1ed44a54c1c4f19eea538f))
+* **user:** gate share member e-mails and agent contacts behind include_contacts ([#249](https://github.com/chrischall/onehome-mcp/issues/249)) ([6536b0b](https://github.com/chrischall/onehome-mcp/commit/6536b0b04fe51e1297e0be678ea550e26a35724e))
+
 ## [1.1.8](https://github.com/chrischall/onehome-mcp/compare/v1.1.7...v1.1.8) (2026-10-09)
 
 
