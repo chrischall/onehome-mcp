@@ -192,3 +192,65 @@ describe('onehome_get_user — the `view` parameter is honoured on BOTH exits', 
     expect(JSON.stringify(t.calls[0]!.variables ?? {})).not.toContain('view');
   });
 });
+
+// fleet-audit#1314: other people's contact details (co-buyer e-mails on the
+// share, the agent's e-mail / phones) stay out of the transcript unless the
+// caller opts in, like homes-mcp's include_agent_contact.
+describe('onehome_get_user / onehome_get_groups — contacts are opt-in', () => {
+  const payload = {
+    user: {
+      id: 'U-1',
+      email: 'me@example.com',
+      groups: [
+        {
+          id: 'G-1',
+          firstName: 'Pat',
+          lastName: 'Buyer',
+          emails: ['pat@example.com', 'spouse@example.com'],
+          agent: {
+            id: 'A-1',
+            fullName: 'Agent Smith',
+            email: 'agent@example.com',
+            phone: '555-0100',
+            officeName: 'Acme Realty',
+            officePhone: '555-0199',
+          },
+        },
+      ],
+    },
+  };
+
+  async function call(tool: string, args: Record<string, unknown>) {
+    const t = new FakeTransport().on('GetOneHomeUser', () => ok(payload));
+    const client = new OneHomeClient({ transport: t });
+    harness = await createTestHarness((server) => registerUserTools(server, client));
+    const r = await harness.callTool(tool, args);
+    const first = r.content[0]!;
+    if (first.type !== 'text') throw new Error('expected text');
+    return first.text;
+  }
+
+  for (const tool of ['onehome_get_user', 'onehome_get_groups']) {
+    it(`${tool} omits member e-mails and agent e-mail/phones by default, keeps name + office`, async () => {
+      const text = await call(tool, {});
+      expect(text).not.toContain('pat@example.com');
+      expect(text).not.toContain('spouse@example.com');
+      expect(text).not.toContain('agent@example.com');
+      expect(text).not.toContain('555-0100');
+      expect(text).not.toContain('555-0199');
+      const group = JSON.parse(text).groups[0];
+      expect(group.agent).toMatchObject({ id: 'A-1', name: 'Agent Smith', office: 'Acme Realty' });
+      expect(group.consumer_name).toBe('Pat Buyer');
+    });
+
+    it(`${tool} returns them with include_contacts: true`, async () => {
+      if (harness) {
+        await harness.close();
+        harness = undefined;
+      }
+      const group = JSON.parse(await call(tool, { include_contacts: true })).groups[0];
+      expect(group.emails).toEqual(['pat@example.com', 'spouse@example.com']);
+      expect(group.agent).toMatchObject({ email: 'agent@example.com', phone: '555-0100', office_phone: '555-0199' });
+    });
+  }
+});

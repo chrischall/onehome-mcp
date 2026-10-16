@@ -45,14 +45,32 @@ interface UserResponse {
   };
 }
 
-function formatGroup(g: RawUserGroup): Record<string, unknown> {
+/**
+ * fleet-audit#1314: a share's member e-mails (often a spouse / co-buyer,
+ * not only the caller) and the agent's e-mail and phones are other people's
+ * contact details, so they stay out of the result unless the caller opts in
+ * — the cohort pattern since homes-mcp's `include_agent_contact`.
+ */
+const includeContactsArg = () =>
+  z
+    .boolean()
+    .optional()
+    .describe(
+      "Include contact details: the share's member e-mail addresses and the agent's e-mail, phone and office phone. Default false — the agent's name, office and team are always returned."
+    );
+
+function formatGroup(
+  g: RawUserGroup,
+  opts: { includeContacts?: boolean } = {}
+): Record<string, unknown> {
+  const contacts = opts.includeContacts === true;
   const out: Record<string, unknown> = {};
   if (g.id) out.group_id = g.id;
   if (g.firstName || g.lastName) {
     out.consumer_name = [g.firstName, g.lastName].filter(Boolean).join(' ');
   }
   if (g.contactId) out.contact_id = g.contactId;
-  if (g.emails && g.emails.length > 0) out.emails = g.emails;
+  if (contacts && g.emails && g.emails.length > 0) out.emails = g.emails;
   if (g.contactStatus) out.contact_status = g.contactStatus;
   if (g.createdAt) out.created_at = g.createdAt;
   if (g.agent) {
@@ -60,10 +78,9 @@ function formatGroup(g: RawUserGroup): Record<string, unknown> {
     out.agent = {
       id: a.id,
       name: a.fullName ?? [a.firstName, a.lastName].filter(Boolean).join(' '),
-      email: a.email,
-      phone: a.phone,
+      ...(contacts ? { email: a.email, phone: a.phone } : {}),
       office: a.officeName,
-      office_phone: a.officePhone,
+      ...(contacts ? { office_phone: a.officePhone } : {}),
       team: a.teamName,
       mls_id: a.mls?.mlsid,
     };
@@ -91,7 +108,7 @@ export function registerUserTools(
     {
       title: 'Get the signed-in OneHome user profile',
       description:
-        'Returns the OneHome user profile + the consumer-share groups attached. For full agent / registered users, queries the GraphQL `user` endpoint. For magic-link consumer-share sessions (where `user { }` is access-denied), falls back to the data captured during the `checkToken` exchange — email, contact id, group/savedSearch ids, and the agent who shared with you.',
+        'Returns the OneHome user profile + the consumer-share groups attached. Share member e-mails and the agent\'s e-mail/phones are omitted unless `include_contacts: true`. For full agent / registered users, queries the GraphQL `user` endpoint. For magic-link consumer-share sessions (where `user { }` is access-denied), falls back to the data captured during the `checkToken` exchange — email, contact id, group/savedSearch ids, and the agent who shared with you.',
       annotations: {
         title: 'Get the signed-in OneHome user profile',
         readOnlyHint: true,
@@ -99,14 +116,18 @@ export function registerUserTools(
         openWorldHint: true,
       },
       inputSchema: z.object({
-        view: viewArg(),}),
+        view: viewArg(),
+        include_contacts: includeContactsArg(),
+      }),
     },
-    async ({ view }) => {
+    async ({ view, include_contacts }) => {
       try {
         const data = await client.graphql<UserResponse>(buildGetOneHomeUser());
         const u = data.user;
         if (!u) return viewResponse(view, null);
-        const groups = (u.groups ?? []).map(formatGroup);
+        const groups = (u.groups ?? []).map((g) =>
+          formatGroup(g, { includeContacts: include_contacts })
+        );
         // BOTH exits answer through `viewResponse`. This one and the
         // session-context fallback below called `minifiedResult` directly,
         // which left `onehome_get_user`'s advertised `view` parameter a no-op
@@ -147,19 +168,23 @@ export function registerUserTools(
     {
       title: 'List my OneHome agent groups',
       description:
-        'List the OneHome groups your agent has shared with you. For full agent / registered users, returns the GraphQL `user.groups` list. For magic-link consumer-share sessions (a single shared group), synthesizes a one-entry list from the `checkToken` session context.',
+        'List the OneHome groups your agent has shared with you. Share member e-mails and the agent\'s e-mail/phones are omitted unless `include_contacts: true`. For full agent / registered users, returns the GraphQL `user.groups` list. For magic-link consumer-share sessions (a single shared group), synthesizes a one-entry list from the `checkToken` session context.',
       annotations: {
         title: 'List my OneHome agent groups',
         readOnlyHint: true,
         idempotentHint: true,
         openWorldHint: true,
       },
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        include_contacts: includeContactsArg(),
+      }),
     },
-    async () => {
+    async ({ include_contacts }) => {
       try {
         const data = await client.graphql<UserResponse>(buildGetOneHomeUser());
-        const groups = (data.user?.groups ?? []).map(formatGroup);
+        const groups = (data.user?.groups ?? []).map((g) =>
+          formatGroup(g, { includeContacts: include_contacts })
+        );
         return minifiedResult({
           source: 'graphql',
           count: groups.length,
@@ -183,7 +208,7 @@ export function registerUserTools(
             {
               group_id: ctx.groupId,
               contact_id: ctx.contactId,
-              ...(ctx.email ? { emails: [ctx.email] } : {}),
+              ...(include_contacts && ctx.email ? { emails: [ctx.email] } : {}),
               agent: ctx.agentId
                 ? { id: ctx.agentId, mls_id: ctx.mlsId }
                 : undefined,
