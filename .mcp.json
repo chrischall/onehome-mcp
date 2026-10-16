@@ -2,8 +2,8 @@
   "mcpServers": {
     "onehome-mcp": {
       "type": "stdio",
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/bundle.js"]
+      "command": "npx",
+      "args": ["-y", "onehome-mcp"]
     }
   }
 }
