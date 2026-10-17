@@ -357,6 +357,24 @@ describe('FetchproxyTransport — successful capture', () => {
     >;
     expect(headers.Authorization).toBe('Bearer eyJ.mock.token');
   });
+
+  it.each([
+    ['a bare token, padded', '  eyJ.bare.token  '],
+    ['a lower-case prefix with extra spaces', '  bearer   eyJ.bare.token '],
+  ])('normalises %s to the bare JWT', async (_label, header) => {
+    captureBehavior = async () => header;
+    const stubFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
+    const t = newTransport({
+      version: '0.0.0-test',
+      fetchImpl: stubFetch as unknown as typeof fetch,
+    });
+    await t.start();
+    await t.graphql({ operationName: 'X', query: 'query X { ok }' });
+    const headers = (stubFetch.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer eyJ.bare.token');
+  });
 });
 
 // A JWT whose `exp` claim is already in the past — used to drive the
