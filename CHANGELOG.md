@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.10](https://github.com/chrischall/onehome-mcp/compare/v1.1.9...v1.1.10) (2026-10-17)
+
+
+### Refactor
+
+* **auth:** normalise the captured bearer with mcp-utils stripBearer ([#252](https://github.com/chrischall/onehome-mcp/issues/252)) ([f95430b](https://github.com/chrischall/onehome-mcp/commit/f95430bfa36b2cfb257e5014c2106bbcf9306930))
+
 ## [1.1.9](https://github.com/chrischall/onehome-mcp/compare/v1.1.8...v1.1.9) (2026-10-16)
 
 
