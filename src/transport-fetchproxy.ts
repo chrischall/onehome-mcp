@@ -25,6 +25,7 @@ import {
   createFetchproxyTransport,
   FetchproxyServer,
   FetchproxyBridgeDownError,
+  stripBearer,
   type FetchproxyServerOpts,
   type FetchproxyTransport as FetchproxyTransportAdapter,
 } from '@chrischall/mcp-utils/fetchproxy';
@@ -504,12 +505,8 @@ export class FetchproxyTransport implements OneHomeTransport {
       const msg = err instanceof Error ? err.message : String(err);
       throw new FetchproxyAuthCaptureError(msg);
     }
-    // `Authorization: Bearer eyJ...` — strip the prefix if present.
-    const trimmed = raw.trim();
-    if (/^Bearer\s+/i.test(trimmed)) {
-      return trimmed.replace(/^Bearer\s+/i, '');
-    }
-    return trimmed;
+    // `Authorization: Bearer eyJ...` — drop the prefix if present, and trim.
+    return stripBearer(raw);
   }
 
   private setToken(token: string): void {
