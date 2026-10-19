@@ -5,6 +5,18 @@ summary: >-
   OneHome (CoreLogic) real-estate access for Claude — search listings, fetch
   property details, photos, schools, and run mortgage / affordability math
   against your agent-shared OneHome portal
+examples:
+  - prompt: >-
+      Show me the newest homes my agent has shared in OneHome, with price,
+      beds, baths and square footage for each.
+    note: Reads the agent-curated saved search and its listings.
+  - prompt: >-
+      Compare the top three listings from my OneHome saved search side by
+      side and tell me which has the best price per square foot.
+  - prompt: >-
+      What's the walk score for the newest listing in my OneHome feed, and
+      what would the monthly payment be with 20% down at 6.5%?
+    note: Uses the listing's coordinates for walk score plus the mortgage calculator.
 #
 # Hosting note (a comment, not user-facing summary text): this is a
 # BROWSER-BRIDGE MCP — it reaches its site through the user's signed-in
