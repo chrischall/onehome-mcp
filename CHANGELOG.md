@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0](https://github.com/chrischall/onehome-mcp/compare/v1.1.10...v1.2.0) (2026-11-04)
+
+
+### Features
+
+* context-group hints, a brief view on the saved-search read ([#263](https://github.com/chrischall/onehome-mcp/issues/263)) ([d07774b](https://github.com/chrischall/onehome-mcp/commit/d07774bf1bf4046c1e67a0657f3a0b3aee45c6d6))
+
+
+### Bug Fixes
+
+* **deps:** Bump @chrischall/mcp-utils ([#262](https://github.com/chrischall/onehome-mcp/issues/262)) ([4297954](https://github.com/chrischall/onehome-mcp/commit/4297954095439e94c490f6303463f72daa4540d0))
+* **deps:** Bump the production-dependencies group with 3 updates ([#259](https://github.com/chrischall/onehome-mcp/issues/259)) ([0438e8a](https://github.com/chrischall/onehome-mcp/commit/0438e8ad166945fa09045074e8d989c04090e256))
+* **deps:** Bump zod ([#258](https://github.com/chrischall/onehome-mcp/issues/258)) ([b4269c9](https://github.com/chrischall/onehome-mcp/commit/b4269c9d984c335252c323ac69d5bc78b9218d52))
+
+
+### Documentation
+
+* **mint:** add sample prompts for the public catalog ([#255](https://github.com/chrischall/onehome-mcp/issues/255)) ([79470aa](https://github.com/chrischall/onehome-mcp/commit/79470aa07eeaf791ba14c40ea066ce659c3fb604))
+
 ## [1.1.10](https://github.com/chrischall/onehome-mcp/compare/v1.1.9...v1.1.10) (2026-10-17)
 
 
