@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/chrischall/onehome-mcp/compare/v1.2.0...v1.2.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **brief:** align the brief view with the fleet contract ([#264](https://github.com/chrischall/onehome-mcp/issues/264)) ([5b63a3f](https://github.com/chrischall/onehome-mcp/commit/5b63a3f5f8f4a13e68ec60b8d1b3eb9089515622))
+
 ## [1.2.0](https://github.com/chrischall/onehome-mcp/compare/v1.1.10...v1.2.0) (2026-11-04)
 
 
