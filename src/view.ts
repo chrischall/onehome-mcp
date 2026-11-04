@@ -28,8 +28,10 @@ export const OH_VIEWS = REALTY_VIEWS;
  *
  * NOT every read tool — this is a deliberate PARTIAL rollout. Four tools
  * declare it (`onehome_get_by_address`, `onehome_compare_properties`,
- * `onehome_graphql`, `onehome_get_user`); the other fifteen call
- * `minifiedResult` directly and advertise no rung at all. `CLAUDE.md` carries
+ * `onehome_graphql`, `onehome_get_user`); the others call
+ * `minifiedResult` directly and advertise no rung at all — except
+ * `onehome_get_saved_search_with_listings`, whose `view: 'full' | 'brief'` is
+ * the context-groups brief, not this vocabulary. `CLAUDE.md` carries
  * the list and the reasoning, including why `onehome_get_property_photos` must
  * never take one — its PRODUCT is the image URLs, so stripping empties the
  * response rather than shrinking it.

@@ -21,6 +21,7 @@ import {
   type ByAddressResult,
   type FallbackPoolCache,
 } from './by-address.js';
+import { LOOKUP_META } from './hints.js';
 
 /**
  * `onehome_resolve_addresses` — bulk address-to-URL resolver. Mirrors
@@ -99,6 +100,7 @@ export function registerResolveAddressesTools(
         'Concurrent fan-out capped at 6 in flight to avoid swamping the upstream. ' +
         'Per-row errors captured — one bad address never fails the whole batch. ' +
         '`group_id` defaults to the magic-link session context. Read-only; safe to call repeatedly.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Bulk-resolve street addresses to OneHome URLs + listing_ids',
         readOnlyHint: true,

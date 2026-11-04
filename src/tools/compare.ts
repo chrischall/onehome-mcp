@@ -12,6 +12,7 @@ import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
 import { fetchListingDetail } from './properties.js';
 import { formatListing, type FormattedListing } from '../format.js';
+import { LOOKUP_META } from './hints.js';
 
 export interface CompareTarget {
   listing_id?: string;
@@ -68,6 +69,7 @@ export function registerCompareTools(
       title: 'Compare OneHome listings side-by-side',
       description:
         "Fetch 2 or more OneHome listings and align their facts side-by-side. Each target may supply `listing_id` (preferred) or `url` (a portal URL). Returns the full per-property record (with `extracted_features` populated) per row. Per-target errors are captured per-row — one bad target will not fail the whole call. Calls are concurrent. The raw `description` is omitted from each row by default (`include_description: true` to keep it). The redundant `summary` table is also opt-in via `include_summary: true` — by default only `rows[]` is returned, which already carries every fact.",
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Compare OneHome listings side-by-side',
         readOnlyHint: true,

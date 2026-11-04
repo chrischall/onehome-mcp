@@ -5,6 +5,7 @@ import { minifiedResult } from '../mcp.js';
 import { buildMediaListingById } from '../queries.js';
 import { extractListingId } from '../url.js';
 import type { RawMediaItem } from '../format.js';
+import { LOOKUP_META } from './hints.js';
 
 interface MediaResponse {
   listingDetail?: {
@@ -57,6 +58,7 @@ export function registerPhotosTools(
       title: 'Full photo gallery for a OneHome listing',
       description:
         'Fetch the full media gallery for a OneHome listing. Returns one entry per image with Thumbnail / Medium / Large CDN URLs, dimensions, the listing-room description (LongDescription), and display order. Pass either `listing_id` or a portal URL.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Full photo gallery for a OneHome listing',
         readOnlyHint: true,

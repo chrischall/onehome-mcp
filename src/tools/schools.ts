@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
+import { LOOKUP_META } from './hints.js';
 
 /**
  * LocalLogic schools + walk-score live on REST endpoints under
@@ -88,6 +89,7 @@ export function registerSchoolsTools(
       title: 'Local-Logic primary + high schools near a lat/lng',
       description:
         'Fetch the Local-Logic school data for a coordinate — separate primary and high-school lists, each entry with name, attributes (types/grades/programs/levels), and proximity (walking distance + straight-line distance). Returns an `error` field with HTTP details if the consumer session does not have access (the schools endpoint is sometimes agent-only). lat/lng usually come from `onehome_get_property` (`latitude` / `longitude`).',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Local-Logic primary + high schools near a lat/lng',
         readOnlyHint: true,
@@ -136,6 +138,7 @@ export function registerSchoolsTools(
       title: 'Local-Logic location scores near a lat/lng',
       description:
         'Local-Logic location scores for a coordinate — pedestrian / car / cycling / transit friendliness, plus proximity summaries for groceries, restaurants, parks, primary + high schools. Each score is a `{ value, text }` pair (value 0-5, text a one-line description). Returns an `error` field with HTTP details if the upstream rejected the request.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Local-Logic location scores near a lat/lng',
         readOnlyHint: true,

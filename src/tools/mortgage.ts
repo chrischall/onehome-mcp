@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { registerMortgageTool } from '@chrischall/realty-core';
 import { minifiedResult } from '../mcp.js';
+import { LOOKUP_META, withToolMeta } from './hints.js';
 
 /**
  * Local-only mortgage / PITI calculator. No network — fully
@@ -17,7 +18,7 @@ export function registerMortgageTools(server: McpServer): void {
   // realty-core's shared registrar (fleet-audit#1090) in the lean shape —
   // the same projection this file used to hand-write — with
   // `loan_term_years` capped at MAX_LOAN_TERM_YEARS.
-  registerMortgageTool(server, {
+  registerMortgageTool(withToolMeta(server, LOOKUP_META), {
     z,
     prefix: 'onehome',
     shape: 'lean',

@@ -5,6 +5,7 @@ import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
 import { GraphQLResponseError } from '../client.js';
 import { buildGetOneHomeUser } from '../queries.js';
+import { LOOKUP_META } from './hints.js';
 
 interface RawUserAgent {
   id?: string;
@@ -109,6 +110,7 @@ export function registerUserTools(
       title: 'Get the signed-in OneHome user profile',
       description:
         'Returns the OneHome user profile + the consumer-share groups attached. Share member e-mails and the agent\'s e-mail/phones are omitted unless `include_contacts: true`. For full agent / registered users, queries the GraphQL `user` endpoint. For magic-link consumer-share sessions (where `user { }` is access-denied), falls back to the data captured during the `checkToken` exchange — email, contact id, group/savedSearch ids, and the agent who shared with you.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Get the signed-in OneHome user profile',
         readOnlyHint: true,
@@ -169,6 +171,7 @@ export function registerUserTools(
       title: 'List my OneHome agent groups',
       description:
         'List the OneHome groups your agent has shared with you. Share member e-mails and the agent\'s e-mail/phones are omitted unless `include_contacts: true`. For full agent / registered users, returns the GraphQL `user.groups` list. For magic-link consumer-share sessions (a single shared group), synthesizes a one-entry list from the `checkToken` session context.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'List my OneHome agent groups',
         readOnlyHint: true,
@@ -226,6 +229,7 @@ export function registerUserTools(
       title: "Inspect every registered OneHome session",
       description:
         "Returns one entry per registered session — its `session_id`, auth_mode, token expiry, and session scope (group_id / saved_search_id / agent_id / contact_id / mls_id) the MCP bootstrapped from each checkToken exchange. `active_session_id` flags which session answers by default; per-listing routing uses the active session when its `mls_id` matches the listing's `~MLS` suffix, else the one session that matches (several matches error — pick one with `onehome_set_active_session`). Tools default unspecified `group_id` / `saved_search_id` arguments from the active session's context, so this is the easiest way to see what they'll default to. Single-session use (the common case) returns a one-entry `sessions[]`.",
+      _meta: LOOKUP_META,
       annotations: {
         title: "Inspect every registered OneHome session",
         readOnlyHint: true,

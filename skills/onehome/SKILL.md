@@ -77,7 +77,12 @@ silently alias the second; and the other three assemble their record from a
 query result plus derived fields, so there is no single upstream payload left
 to hand back.
 
-**The other seventeen tools take no `view` at all.** That is scope — a partial
+**One tool takes a different `view`:** `onehome_get_saved_search_with_listings`
+takes `view: "full" | "brief"` — `full` (the default) is its usual record;
+`brief` is one line per listing for context groups (below). It has no
+`compact` rung.
+
+**The other sixteen tools take no `view` at all.** That is scope — a partial
 rollout, not an oversight — but for two of them it is also correct on the
 merits:
 
@@ -86,6 +91,28 @@ merits:
   response, it would empty it. Never media-strip a tool whose name is the test.
 - `onehome_calculate_mortgage` and `onehome_calculate_affordability` are local
   math returning a handful of numbers — already narrower than any projection.
+
+## In context groups
+
+This server is in the **home** group (`_meta.mint.domain: "home"`); every tool
+but `onehome_healthcheck` carries a hint.
+
+- **Canonical read:** `onehome_get_saved_search_with_listings` answers
+  *what's new* — the saved search's listings, newest change first, as one
+  `view: "brief"` line each (`address · price — date of its last change —
+  status, change`, e.g. a new listing or a price decrease). It takes no date
+  range and declares no subject: saved searches are not listable at start (a
+  consumer share sees only the one in its session context), so the host calls
+  it once and it answers from the session's own saved search.
+- Nothing here answers *what's due* or *what's on*; every other read is a
+  `lookup`. `onehome_set_active_session` is a `change`; `onehome_set_auth` is
+  `other`.
+- **A compound ask** looks like "anything new on the house hunt, and is the
+  pool heater on?" — the home group fans out to this server's saved search and
+  to the other home members in one call.
+- In fetchproxy-capture mode (no `ONEHOME_TOKEN` / `ONEHOME_MAGIC_LINK`) the
+  bearer comes from a signed-in `portal.onehome.com` tab; with no tab open the
+  group answers that OneHome **needs your browser open**.
 
 ## Common pitfalls
 

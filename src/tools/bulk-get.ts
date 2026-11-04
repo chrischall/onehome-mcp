@@ -11,6 +11,7 @@ import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { fetchListingDetail } from './properties.js';
 import { formatListing } from '../format.js';
+import { LOOKUP_META } from './hints.js';
 
 // Max input listing_ids per call; sized to cover a full consumer saved-search share.
 // Concurrent fan-out is bounded by `BRIDGE_CONCURRENCY` (=6) so a 200-id
@@ -38,6 +39,7 @@ export function registerBulkGetTools(
         '`extracted_features` is populated per row ' +
         'automatically. The raw `description` (PublicRemarks) is omitted by default — pass `include_description: true` ' +
         'to keep it. `group_id` defaults to the magic-link session context.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Bulk-fetch OneHome listings by id',
         readOnlyHint: true,
