@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { registerAffordabilityTool } from '@chrischall/realty-core';
 import { minifiedResult } from '../mcp.js';
+import { LOOKUP_META, withToolMeta } from './hints.js';
 
 /**
  * Local-only affordability calculator. Solves for max home price under
@@ -14,7 +15,7 @@ import { minifiedResult } from '../mcp.js';
 export function registerAffordabilityTools(server: McpServer): void {
   // realty-core's shared registrar (fleet-audit#1090): schema (with the
   // MAX_LOAN_TERM_YEARS cap), description and math.
-  registerAffordabilityTool(server, {
+  registerAffordabilityTool(withToolMeta(server, LOOKUP_META), {
     z,
     prefix: 'onehome',
     toResult: minifiedResult,

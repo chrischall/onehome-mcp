@@ -4,6 +4,7 @@ import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
 import { viewArg, viewResponse } from '../view.js';
 import { graphqlOperationKinds, isReadOnlyGraphqlDocument } from '@chrischall/mcp-utils/graphql';
+import { LOOKUP_META } from './hints.js';
 
 /**
  * Power-user escape hatch: send a raw GraphQL document with the
@@ -47,6 +48,7 @@ export function registerGraphqlTool(
       title: 'Send a raw GraphQL document to services.onehome.com',
       description:
         "Power-user escape hatch — send a raw GraphQL document with variables. Returns the whole `{ data, errors, status, url }` envelope, unprojected, so you can read upstream schema errors directly. Note the default: `view` is `compact`, which strips image/avatar URLs out of `data` (every envelope key and every non-media field is kept). Pass `view: 'full'` when you need the envelope byte for byte — worth doing if you are here because a payload is not what you expected, so a missing field is never this server's doing. Operation names live in the portal bundle; common ones include `GetOneHomeUser`, `GetListings`, `GetPins`, `ListingById`, `MediaListingById`, `GetSavedSearches`, `ListingSuggestionsSearch`. (LocalLogic schools/walk-score are REST endpoints, not GraphQL operations — use `onehome_get_schools` / `onehome_get_walk_score`.) Pass `query` (the full document body), an `operation_name` matching the document, and any `variables` as JSON. Read-only: documents containing a `mutation` or `subscription` operation — or that cannot be parsed as a read-only `query` document — are refused.",
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Send a raw GraphQL document to services.onehome.com',
         readOnlyHint: true,

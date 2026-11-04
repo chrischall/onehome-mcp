@@ -14,6 +14,7 @@ import {
   streetFromSuggestion,
   type SuggestionEntry,
 } from '../address-format.js';
+import { LOOKUP_META } from './hints.js';
 
 interface ListingsResponse {
   listings?: { pageInfo?: unknown; listings?: RawListingDetail[] };
@@ -58,6 +59,7 @@ export function registerSearchTools(
       title: 'Search listings inside a OneHome group / saved share',
       description:
         "Fetch listings inside a OneHome consumer-share. Two modes:\n\n  - With `saved_search_id`: fetch the agent-curated collection (the standard 'Homes at <name>' view). The MCP first resolves the saved search's listingIds and then inflates them via listingsBySavedSearchId — this is the only mode that works for non-agent consumer accounts.\n  - With just `group_id` and no `saved_search_id`: try the raw `listings(groupId, browseParameter)` endpoint. If page 0 comes back empty with no reported results (the access-restricted shape consumer-shares hit) AND the session context has a `savedSearchId` for that same group, the tool falls back to the saved-search path and marks the response `fell_back_to_saved_search: true`. If there's no fallback target it raises a clear error rather than silently returning empty. An empty later page (paging past the end) is returned as an empty page, never swapped for the saved-search collection.\n\nBoth args default from the MCP's bootstrapped session context (the magic-link checkToken response) when neither is passed explicitly. Sort is `MajorChangeTimestamp DESC` ('Newest') unless overridden. `include_dislikes: false` by default — flip it on to include listings you've thumbs-downed in OneHome.\n\nListings here are returned via the GraphQL listing-card projection, which does NOT include `PublicRemarks` — so there is no `description` field on search results and no `include_description` flag to opt into one. Each listing carries the structured `extracted_features` object instead. Use `onehome_get_property(listing_id)` per row when you need the full description for a specific listing.",
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Search listings inside a OneHome group / saved share',
         readOnlyHint: true,
@@ -228,6 +230,7 @@ export function registerSearchTools(
       title: 'Free-text suggestion search across MLS feeds',
       description:
         'Cross-feed suggestion search by address, MLS number, or partial query. Bypasses the group/saved-search structure and hits the global suggestion endpoint — useful for "find an address" or "look up by MLS number". Returns id, address parts, beds/baths, list price, thumbnail per match. Inflate any result with `onehome_get_property`. Optional `group_id` scopes suggestions to one OneHome market.',
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Free-text suggestion search across MLS feeds',
         readOnlyHint: true,

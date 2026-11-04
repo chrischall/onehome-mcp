@@ -17,6 +17,7 @@ import {
   streetFromSuggestion,
   type SuggestionEntry,
 } from '../address-format.js';
+import { LOOKUP_META } from './hints.js';
 
 interface ListingSuggestionsResponse {
   listingSuggestionsSearch?: SuggestionEntry[];
@@ -305,6 +306,7 @@ export function registerByAddressTools(
       title: 'Resolve a OneHome listing by street address',
       description:
         "Resolve a free-text street address (with optional city/state/zip) to a OneHome listing's canonical portal URL and id in one call. Walks a 2-rung ladder: (1) `ListingSuggestionsSearch` against the magic-link saved-search scope; (2) when that misses, search-fallback — page-walks the broader saved-search (or raw `listings(groupId)`) pool bounded by the same `groupId` and fuzzy-matches input address tokens. Returns `{ url, listing_id, address, resolved, matched_via }` where `matched_via: \"suggestions\" | \"search_fallback\"` reports which rung produced the hit. When no listing matches, returns `{ resolved: false, error: \"no listing found\" }` rather than throwing. Read-only; safe to call repeatedly.",
+      _meta: LOOKUP_META,
       annotations: {
         title: 'Resolve a OneHome listing by street address',
         readOnlyHint: true,

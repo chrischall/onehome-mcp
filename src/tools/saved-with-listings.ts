@@ -6,12 +6,44 @@ import {
   buildGetSavedListings,
   buildGetSavedSearchBySearchId,
 } from '../queries.js';
-import { formatListing, type RawListingDetail } from '../format.js';
+import {
+  formatListing,
+  type FormattedListing,
+  type RawListingDetail,
+} from '../format.js';
+import { homeMeta, SAVED_SEARCH_ALIASES } from './hints.js';
 import {
   formatSavedSearch,
   type FormattedSavedSearch,
   type RawSavedSearch,
 } from './saved.js';
+
+const BRIEF_MAX = 120;
+const USD = new Intl.NumberFormat('en-US');
+
+/** `NewListing` → `new listing`, `PriceDecrease` → `price decrease`. */
+function humanChange(type: string): string {
+  return type.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+/**
+ * One listing as one line for the context-groups `brief` view:
+ * `<address · price> — <ISO date of the last major change | no date> —
+ * <status, change>`, at most 120 chars (the title is what gives way).
+ */
+export function briefLine(l: FormattedListing): string {
+  const at = l.major_change?.at;
+  const date = at && /^\d{4}-\d{2}-\d{2}/.test(at) ? at.slice(0, 10) : 'no date';
+  const status =
+    [l.status, l.major_change ? humanChange(l.major_change.type) : undefined]
+      .filter(Boolean)
+      .join(', ') || 'unknown';
+  const tail = ` — ${date} — ${status}`;
+  const price = typeof l.list_price === 'number' ? ` · $${USD.format(l.list_price)}` : '';
+  const title = `${l.address_full ?? l.listing_id}${price}`;
+  const room = BRIEF_MAX - tail.length;
+  return (title.length > room ? `${title.slice(0, room - 1)}…` : title) + tail;
+}
 
 interface SavedListingsResponse {
   listingsBySavedSearchId?: {
@@ -42,7 +74,10 @@ export function registerSavedWithListingsTools(
         'the GraphQL listing-card projection (`buildGetSavedListings`), which does ' +
         'NOT include `PublicRemarks` — so there is no raw `description` to opt back ' +
         'into here. Use `onehome_get_property(listing_id)` per row when you need the ' +
-        'full description for a specific listing.',
+        'full description for a specific listing. `view: "brief"` answers one ' +
+        'line per listing instead: `address · price — date of its last change — ' +
+        'status, change` (e.g. a new listing or a price decrease).',
+      _meta: homeMeta('whats-new', { canonical: true, aliases: SAVED_SEARCH_ALIASES }),
       annotations: {
         title: 'Fetch a saved search and inflate its listings in one call',
         readOnlyHint: true,
@@ -62,6 +97,14 @@ export function registerSavedWithListingsTools(
           ),
         sort_order: z.enum(['ASC', 'DESC']).optional(),
         include_dislikes: z.boolean().optional(),
+        view: z
+          .enum(['full', 'brief'])
+          .optional()
+          .describe(
+            '"full" (default) returns the saved search and its listing records; ' +
+              '"brief" returns one line per listing: address · price — date of its ' +
+              'last change (or "no date") — status, change.'
+          ),
       }),
     },
     async (i) => {
@@ -113,6 +156,7 @@ export function registerSavedWithListingsTools(
 
       // Step 2: short-circuit when the saved search has no listings.
       if (listingIds.length === 0) {
+        if (i.view === 'brief') return { content: [{ type: 'text' as const, text: '' }] };
         return minifiedResult({
           saved_search: formattedSavedSearch,
           group_id: groupId,
@@ -141,6 +185,11 @@ export function registerSavedWithListingsTools(
       const listings = data.listingsBySavedSearchId?.listings ?? [];
       // FRAGMENT_LISTING_CARD has no PublicRemarks; no description ever surfaces here.
       const formattedListings = listings.map((l) => formatListing(l.id ?? '', l));
+      if (i.view === 'brief') {
+        return {
+          content: [{ type: 'text' as const, text: formattedListings.map(briefLine).join('\n') }],
+        };
+      }
       return minifiedResult({
         saved_search: formattedSavedSearch,
         group_id: groupId,

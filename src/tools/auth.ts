@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
 import { minifiedResult } from '../mcp.js';
+import { homeMeta } from './hints.js';
 
 /**
  * Compact fingerprint of an auth token so the tool's response confirms
@@ -30,6 +31,7 @@ export function registerAuthTools(
       title: 'Register an additional OneHome session at runtime',
       description:
         'Provide a magic-link URL, a raw JWT bearer, or an email-token to ADD another authenticated session to the MCP — useful when a buyer holds shares across multiple agents/MLSes (one magic link per share). The MCP detects the input shape (URL → extract `?token=`; 3-segment JWT → use directly; otherwise → treat as email-token and exchange via `/api/authentication/checkToken`), registers a new direct-bearer transport, and marks it active. Previously-registered sessions stay registered — switch back with `onehome_set_active_session(session_id)`, or let MLS-suffix routing (`~CANOPY`, `~HCAOR`, …) pick automatically per listing. The response includes the assigned `session_id`, the new `active_session_id`, the auth_mode/status, the session_context the checkToken response yielded, and a `bearer_fingerprint` of the resolved JWT (first 8 + `…` + last 4 chars) — never the full bearer. SECURITY: the input itself sits in your chat history; treat magic links as short-lived credentials.',
+      _meta: homeMeta('other'),
       annotations: {
         title: 'Register an additional OneHome session at runtime',
         readOnlyHint: false,
@@ -71,6 +73,7 @@ export function registerAuthTools(
       title: 'Switch which registered OneHome session is active',
       description:
         'Force a specific registered session to be the active one. Useful when MLS-suffix routing picks the wrong session (e.g. two shares in the same MLS, a free-text search across multiple MLSes, or a listing without a `~MLS` suffix). Pass a `session_id` previously returned by `onehome_set_auth` or surfaced in `onehome_get_session_context`. The active session answers any request without a `~MLS`-suffixed listing id AND any `~MLS` request whose MLS matches its own; a `~MLS` id matching several other sessions errors until you pick one here.',
+      _meta: homeMeta('change'),
       annotations: {
         title: 'Switch which registered OneHome session is active',
         readOnlyHint: false,
