@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { OneHomeClient } from '../client.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
+import { UNTRUSTED_CONTENT_RULE, untrustedEnvelope } from '@chrischall/mcp-utils';
 import { minifiedResult } from '../mcp.js';
 import {
   buildGetSavedListings,
@@ -26,10 +28,20 @@ function humanChange(type: string): string {
   return type.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 }
 
+/** The shortest a title is cut to before the status gives way too. */
+const TITLE_FLOOR = 24;
+
+const cut = (s: string, n: number): string =>
+  s.length > n ? `${s.slice(0, Math.max(n - 1, 0))}…` : s;
+
 /**
  * One listing as one line for the context-groups `brief` view:
  * `<address · price> — <ISO date of the last major change | no date> —
- * <status, change>`, at most 120 chars (the title is what gives way).
+ * <status, change>`, cut to ≤ 120 chars as a WHOLE, title first: the title
+ * shortens until the line fits, and if the status alone would still overflow
+ * once the title is at its floor, the status is cut too. A title starting with
+ * `-- ` or `\` is escaped with one leading `\` so it never reads as a note
+ * (the gateway strips one backslash from every item line).
  */
 export function briefLine(l: FormattedListing): string {
   const at = l.major_change?.at;
@@ -38,11 +50,38 @@ export function briefLine(l: FormattedListing): string {
     [l.status, l.major_change ? humanChange(l.major_change.type) : undefined]
       .filter(Boolean)
       .join(', ') || 'unknown';
-  const tail = ` — ${date} — ${status}`;
   const price = typeof l.list_price === 'number' ? ` · $${USD.format(l.list_price)}` : '';
-  const title = `${l.address_full ?? l.listing_id}${price}`;
-  const room = BRIEF_MAX - tail.length;
-  return (title.length > room ? `${title.slice(0, room - 1)}…` : title) + tail;
+  const raw = `${l.address_full ?? l.listing_id}${price}`;
+  const title = raw.startsWith('-- ') || raw.startsWith('\\') ? `\\${raw}` : raw;
+  const sep = ` — ${date} — `;
+  const room = BRIEF_MAX - sep.length;
+  if (title.length + status.length <= room) return `${title}${sep}${status}`;
+  const titleRoom = Math.max(room - status.length, Math.min(title.length, TITLE_FLOOR));
+  const shown = cut(title, titleRoom);
+  return `${shown}${sep}${cut(status, room - shown.length)}`;
+}
+
+/** Who writes the brief lines' text: the listing feed, not this MCP. */
+const BRIEF_WHO_WROTE =
+  'Listing addresses and statuses come from the MLS listing feed, written by listing agents.';
+
+/**
+ * The brief answer: the lines plus their notes (`-- none` when there is
+ * nothing, `-- N of M shown` when the saved search holds more listings than
+ * this page), inside the untrusted-data envelope as `data: string[]`, minified.
+ */
+function briefResponse(listings: FormattedListing[], total: number): CallToolResult {
+  const lines = listings.map(briefLine);
+  if (lines.length === 0) lines.push('-- none');
+  else if (total > listings.length) lines.push(`-- ${listings.length} of ${total} shown`);
+  const payload = untrustedEnvelope(lines, { note: `${BRIEF_WHO_WROTE} ${UNTRUSTED_CONTENT_RULE}` });
+  return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
+/** The page's own `totalElements` when it reports one, else the saved search's id count. */
+function totalOf(pageInfo: unknown, fallback: number): number {
+  const t = (pageInfo as { totalElements?: unknown } | null | undefined)?.totalElements;
+  return typeof t === 'number' && Number.isFinite(t) ? t : fallback;
 }
 
 interface SavedListingsResponse {
@@ -76,7 +115,10 @@ export function registerSavedWithListingsTools(
         'into here. Use `onehome_get_property(listing_id)` per row when you need the ' +
         'full description for a specific listing. `view: "brief"` answers one ' +
         'line per listing instead: `address · price — date of its last change — ' +
-        'status, change` (e.g. a new listing or a price decrease).',
+        'status, change` (e.g. a new listing or a price decrease), inside the ' +
+        'untrusted-data envelope as `data: string[]`, with `-- none` for an empty ' +
+        'saved search and `-- N of M shown` when the page holds fewer listings ' +
+        'than the search.',
       _meta: homeMeta('whats-new', { canonical: true, aliases: SAVED_SEARCH_ALIASES }),
       annotations: {
         title: 'Fetch a saved search and inflate its listings in one call',
@@ -103,7 +145,8 @@ export function registerSavedWithListingsTools(
           .describe(
             '"full" (default) returns the saved search and its listing records; ' +
               '"brief" returns one line per listing: address · price — date of its ' +
-              'last change (or "no date") — status, change.'
+              'last change (or "no date") — status, change — in the untrusted-data ' +
+              'envelope, with "-- " note lines for an empty or partial page.'
           ),
       }),
     },
@@ -156,7 +199,7 @@ export function registerSavedWithListingsTools(
 
       // Step 2: short-circuit when the saved search has no listings.
       if (listingIds.length === 0) {
-        if (i.view === 'brief') return { content: [{ type: 'text' as const, text: '' }] };
+        if (i.view === 'brief') return briefResponse([], 0);
         return minifiedResult({
           saved_search: formattedSavedSearch,
           group_id: groupId,
@@ -186,9 +229,10 @@ export function registerSavedWithListingsTools(
       // FRAGMENT_LISTING_CARD has no PublicRemarks; no description ever surfaces here.
       const formattedListings = listings.map((l) => formatListing(l.id ?? '', l));
       if (i.view === 'brief') {
-        return {
-          content: [{ type: 'text' as const, text: formattedListings.map(briefLine).join('\n') }],
-        };
+        return briefResponse(
+          formattedListings,
+          totalOf(data.listingsBySavedSearchId?.pageInfo, listingIds.length)
+        );
       }
       return minifiedResult({
         saved_search: formattedSavedSearch,

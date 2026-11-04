@@ -100,7 +100,10 @@ but `onehome_healthcheck` carries a hint.
 - **Canonical read:** `onehome_get_saved_search_with_listings` answers
   *what's new* — the saved search's listings, newest change first, as one
   `view: "brief"` line each (`address · price — date of its last change —
-  status, change`, e.g. a new listing or a price decrease). It takes no date
+  status, change`, e.g. a new listing or a price decrease), inside the
+  untrusted-data envelope as `data: string[]` because listing text comes from
+  the MLS feed. An empty search answers `-- none`; a page holding fewer
+  listings than the search adds `-- N of M shown`. It takes no date
   range and declares no subject: saved searches are not listable at start (a
   consumer share sees only the one in its session context), so the host calls
   it once and it answers from the session's own saved search.
