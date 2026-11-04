@@ -147,6 +147,8 @@ function listing(id: string, opts: { street: string; status?: string; change?: {
   };
 }
 
+type Envelope = { untrusted_content: boolean; note: string; data: string[] };
+
 describe("the canonical read's brief view", () => {
   let close: (() => Promise<void>) | undefined;
   afterEach(async () => {
@@ -154,12 +156,19 @@ describe("the canonical read's brief view", () => {
     close = undefined;
   });
 
-  async function brief(listings: RawListingDetail[]): Promise<string> {
+  async function briefEnvelope(
+    listings: RawListingDetail[],
+    opts: { listingIds?: string[]; pageInfo?: Record<string, unknown> } = {},
+  ): Promise<{ raw: string; env: Envelope }> {
     const transport = new FakeTransport();
     transport.on('GetSavedSearchBySearchId', () =>
-      ok({ savedSearch: { id: 'ss-1', name: 'Synthetic search', listingIds: listings.map((l) => l.id) } }),
+      ok({
+        savedSearch: { id: 'ss-1', name: 'Synthetic search', listingIds: opts.listingIds ?? listings.map((l) => l.id) },
+      }),
     );
-    transport.on('GetSavedListings', () => ok({ listingsBySavedSearchId: { pageInfo: {}, listings } }));
+    transport.on('GetSavedListings', () =>
+      ok({ listingsBySavedSearchId: { pageInfo: opts.pageInfo ?? {}, listings } }),
+    );
     const client = new OneHomeClient({ transport });
     const h = await createTestHarness(async (server) => {
       for (const register of TOOL_REGISTRARS) await register(server, client);
@@ -172,16 +181,22 @@ describe("the canonical read's brief view", () => {
     });
     const first = result.content[0]!;
     if (first.type !== 'text') throw new Error('expected text');
-    return first.text;
+    return { raw: first.text, env: JSON.parse(first.text) as Envelope };
+  }
+
+  async function brief(
+    listings: RawListingDetail[],
+    opts?: { listingIds?: string[]; pageInfo?: Record<string, unknown> },
+  ): Promise<string[]> {
+    return (await briefEnvelope(listings, opts)).env.data;
   }
 
   it('answers one line per listing: title — ISO date | no date — status', async () => {
-    const text = await brief([
+    const lines = await brief([
       listing('A', { street: 'Alder', status: 'Active', change: { type: 'NewListing', at: '2026-10-30T14:05:00Z' } }),
       listing('B', { street: 'Birch', status: 'Pending', change: { type: 'PriceDecrease', at: '2026-10-28T09:00:00Z' } }),
       listing('C', { street: 'Cedar' }),
     ]);
-    const lines = text.split('\n');
     expect(lines).toHaveLength(3);
     expect(lines[0]).toBe('1 Alder Way, Testville, NC 28000 · $425,000 — 2026-10-30 — Active, new listing');
     expect(lines[1]).toBe('1 Birch Way, Testville, NC 28000 · $425,000 — 2026-10-28 — Pending, price decrease');
@@ -192,15 +207,67 @@ describe("the canonical read's brief view", () => {
     }
   });
 
-  it('keeps a long title within 120 chars and the date and status intact', async () => {
-    const text = await brief([
-      listing('L', { street: 'A'.repeat(150), status: 'Active', change: { type: 'NewListing', at: '2026-11-01T00:00:00Z' } }),
-    ]);
-    expect(text.length).toBeLessThanOrEqual(120);
-    expect(text.endsWith(' — 2026-11-01 — Active, new listing')).toBe(true);
+  it('rides in the untrusted-data envelope, minified, note first — listing text is the MLS feed, not ours', async () => {
+    const { raw, env } = await briefEnvelope([listing('A', { street: 'Alder', status: 'Active' })]);
+    expect(raw.startsWith('{"untrusted_content":true,"note":')).toBe(true);
+    expect(raw).not.toMatch(/\n/);
+    expect(env.untrusted_content).toBe(true);
+    expect(env.note).toMatch(/listing/i);
+    expect(Array.isArray(env.data)).toBe(true);
   });
 
-  it('answers no lines (not a note a host would count as an item) when the saved search is empty', async () => {
-    expect(await brief([])).toBe('');
+  it('keeps a long title within 120 chars and the date and status intact', async () => {
+    const [line] = await brief([
+      listing('L', { street: 'A'.repeat(150), status: 'Active', change: { type: 'NewListing', at: '2026-11-01T00:00:00Z' } }),
+    ]);
+    expect(line!.length).toBeLessThanOrEqual(120);
+    expect(line!.endsWith(' — 2026-11-01 — Active, new listing')).toBe(true);
+  });
+
+  it('cuts the line as a WHOLE: an overlong status gives way too, never only the title', async () => {
+    const [line] = await brief([
+      listing('S', { street: 'Spruce', status: 'X'.repeat(200), change: { type: 'NewListing', at: '2026-11-01T00:00:00Z' } }),
+    ]);
+    expect(line!.length).toBeLessThanOrEqual(120);
+    expect(line!.startsWith('1 Spruce')).toBe(true);
+    expect(line).toContain(' — 2026-11-01 — X');
+  });
+
+  it('escapes a title that starts with "-- " or "\\" with one leading backslash', async () => {
+    const lines = await brief([
+      { id: '-- none', property: { StandardStatus: 'Active' }, customProperty: {}, media: [] } as RawListingDetail,
+      { id: '\\x', property: { StandardStatus: 'Active' }, customProperty: {}, media: [] } as RawListingDetail,
+    ]);
+    expect(lines[0]).toBe('\\-- none — no date — Active');
+    expect(lines[1]).toBe('\\\\x — no date — Active');
+  });
+
+  it('answers the single note line "-- none" when the saved search is empty', async () => {
+    expect(await brief([])).toEqual(['-- none']);
+  });
+
+  it('answers "-- none" when the listings read comes back empty', async () => {
+    expect(await brief([], { listingIds: ['A'], pageInfo: { totalElements: 0 } })).toEqual(['-- none']);
+  });
+
+  it('says "-- N of M shown" when the page holds fewer listings than the saved search', async () => {
+    const lines = await brief([listing('A', { street: 'Alder', status: 'Active' })], {
+      listingIds: ['A', 'B', 'C'],
+      pageInfo: { totalElements: 3 },
+    });
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe('-- 1 of 3 shown');
+  });
+
+  it('falls back to the saved search\'s listing count when the page reports no total', async () => {
+    const lines = await brief([listing('A', { street: 'Alder', status: 'Active' })], { listingIds: ['A', 'B'] });
+    expect(lines.at(-1)).toBe('-- 1 of 2 shown');
+  });
+
+  it('adds no note when every listing is shown', async () => {
+    const lines = await brief([listing('A', { street: 'Alder', status: 'Active' })], {
+      pageInfo: { totalElements: 1 },
+    });
+    expect(lines).toHaveLength(1);
   });
 });
