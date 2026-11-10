@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/chrischall/onehome-mcp/compare/v1.2.1...v1.2.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **deps:** Bump @chrischall/mcp-utils ([#268](https://github.com/chrischall/onehome-mcp/issues/268)) ([86c165e](https://github.com/chrischall/onehome-mcp/commit/86c165ec6374131293bd3a83dc0dcc7473323272))
+
 ## [1.2.1](https://github.com/chrischall/onehome-mcp/compare/v1.2.0...v1.2.1) (2026-11-04)
 
 
